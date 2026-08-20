@@ -1,0 +1,23 @@
+*
+!.gitignore
+!.gitattributes
+!package.json
+!tsconfig.json
+!src/
+!src/**
+!scripts/
+!scripts/build.js
+!.github/
+!.github/**
+!README_fa.md
+!README.md
+!RELEASE.md
+!NAT64Prefixes.md
+!docs
+!docs/**
+!LICENSE
+!package-lock.json
+
+# Never commit local secrets
+.dev.vars
+.dev.vars.*
