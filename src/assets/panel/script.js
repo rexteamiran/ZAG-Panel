@@ -1205,7 +1205,9 @@ loadLimits();
 loadApiKeys();
 
 function limitsApi(path) {
-    return `../api/${path}`;
+    // Relative to /{securePath}/panel, so './' keeps the secure path in the
+    // URL. '../' would resolve to /api/... and lose it entirely.
+    return `./api/${path}`;
 }
 
 function fmtBytes(bytes) {
