@@ -215,6 +215,28 @@ export interface PanelLimits {
     displayName: string;
     /** Public token that addresses the subscriber portal. */
     subToken: string;
+    /**
+     * Where this panel lives, recorded by the wizard at install time.
+     * The dashboard builds its links from these instead of parsing the
+     * deployed script, which is fragile and fails silently.
+     */
+    panelHost: string;
+    panelPath: string;
+    /**
+     * Adds unroutable entries to the subscription whose names carry the
+     * remaining quota and days. The customer sees them in their VPN app
+     * without anyone having to message them.
+     */
+    showStatusNodes: boolean;
+    /** Name of the ZagiRo profile last applied, for display only. */
+    zagiroName: string;
+    /**
+     * API key the wizard uses to reach this panel's own endpoints, seeded at
+     * install. Anyone holding the Cloudflare token can already rewrite the
+     * whole worker, so keeping it in the same store adds no new exposure -
+     * but it is stripped from every API response all the same.
+     */
+    wizardKey: string;
     /** 0 means unlimited, for every limit below. */
     limitTotalBytes: number;
     limitDailyBytes: number;

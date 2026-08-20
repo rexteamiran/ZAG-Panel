@@ -1,5 +1,15 @@
 # ZAGROOO Panel
 
+## 1.1.0
+
+- **Status notes in the client**: the subscription can carry unroutable
+  entries whose names show the remaining volume and days, so a customer sees
+  their own status inside their VPN app without being messaged.
+- **Settings API** at `/api/settings`, so the wizard can push a saved profile
+  through the panel's own validation rather than writing raw values.
+- The panel now records where it lives, so the wizard dashboard builds its
+  links from stored values instead of parsing the deployed script.
+
 ## 1.0.1
 
 - Fixed the Limits section in the admin panel: it called the API one path

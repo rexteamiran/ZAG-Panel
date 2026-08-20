@@ -2,7 +2,10 @@ import { PanelApiKey, PanelLimits } from '#types/settings';
 import { authenticate } from '@auth';
 import { HttpStatus, respond, safeError } from '@common';
 import { activeDevices, evaluateAccess, panelStatus } from '@limits';
-import { getGlobals, getKvSettings, setSettings, subscriptions } from '@settings';
+import { getGlobals, getKvSettings, getSettings, setSettings, subscriptions } from '@settings';
+import { updateDataset } from '@kv';
+import { validateSettings } from '@validators';
+import { KvSettings, PanelSettings } from '#types/settings';
 import {
     getLimits,
     getUsageSnapshot,
@@ -134,6 +137,11 @@ export async function handlePanelApi(request: Request, env: Env): Promise<Respon
             case 'links':
                 return getLinks(limits);
 
+            case 'settings':
+                return request.method === 'GET'
+                    ? respond(true, HttpStatus.OK, '', { settings: shareableSettings() })
+                    : applySettings(request, env);
+
             default:
                 return fallback(request);
         }
@@ -150,9 +158,9 @@ function corsHeaders(): Record<string, string> {
     };
 }
 
-/** Limits minus the secrets: key hashes never leave the panel. */
+/** Limits minus the secrets: key hashes and the wizard key never leave. */
 function publicLimits(limits: PanelLimits) {
-    const { panelApiKeys, ...rest } = limits;
+    const { panelApiKeys, wizardKey, ...rest } = limits;
     return { ...rest, apiKeyCount: panelApiKeys.length };
 }
 
@@ -362,4 +370,72 @@ async function handleKeys(request: Request, env: Env, limits: PanelLimits): Prom
     }
 
     return respond(false, HttpStatus.METHOD_NOT_ALLOWED, 'Method not allowed.');
+}
+
+/* ==========================================================================
+   Proxy settings
+
+   What a ZagiRo profile carries. Deliberately a subset of KvSettings:
+
+   - customDomain and panelVersion are specific to one panel and must never be
+     copied onto another.
+   - remoteSettings would make the panel follow a third party's settings.
+   - Everything in EMBEDED_SETTINGS (UUID, secure path, proxy IPs, DoH URL) is
+     baked into the deployed script, so changing it means redeploying the
+     worker. Profiles stay in KV so applying one is instant and reversible.
+   ========================================================================== */
+
+const PER_PANEL_KEYS: Array<keyof KvSettings> = ['customDomain', 'remoteSettings', 'panelVersion'];
+
+function shareableSettings(): Partial<KvSettings> {
+    const settings = getKvSettings();
+    const out: Record<string, unknown> = {};
+
+    for (const [key, value] of Object.entries(settings)) {
+        if (PER_PANEL_KEYS.includes(key as keyof KvSettings)) continue;
+        out[key] = value;
+    }
+
+    return out as Partial<KvSettings>;
+}
+
+async function applySettings(request: Request, env: Env): Promise<Response> {
+    if (request.method !== 'PUT' && request.method !== 'PATCH') {
+        return respond(false, HttpStatus.METHOD_NOT_ALLOWED, 'Use PUT or PATCH.');
+    }
+
+    const body = await request.json().catch(() => null) as Record<string, unknown> | null;
+    if (!body || typeof body !== 'object') {
+        return respond(false, HttpStatus.BAD_REQUEST, 'Expected a JSON body.');
+    }
+
+    const patch = (body.settings ?? body) as Record<string, unknown>;
+    const current = getSettings() as PanelSettings;
+    const merged: PanelSettings = { ...current };
+
+    // Only keys the panel already knows about, and never the per-panel ones.
+    const known = Object.keys(getKvSettings()) as Array<keyof KvSettings>;
+    const applied: string[] = [];
+
+    for (const key of known) {
+        if (PER_PANEL_KEYS.includes(key)) continue;
+        if (patch[key] === undefined) continue;
+        (merged as any)[key] = patch[key];
+        applied.push(key);
+    }
+
+    if (!applied.length) {
+        return respond(false, HttpStatus.BAD_REQUEST, 'Nothing in the profile applies to this panel.');
+    }
+
+    // Same validation the admin UI goes through, so a bad profile is refused
+    // rather than written and left to break the panel.
+    const errors = validateSettings(merged);
+    if (errors) return respond(false, HttpStatus.BAD_REQUEST, 'Validation error', errors);
+
+    // updateDataset only - deliberately not updateMainSettings, which would
+    // rebuild and redeploy the worker.
+    await updateDataset(env, merged);
+
+    return respond(true, HttpStatus.OK, `Applied ${applied.length} settings.`, { applied });
 }

@@ -1,5 +1,7 @@
 import { base64DecodeUtf8, base64EncodeUtf8 } from '@common';
 import { getSettings } from '@settings';
+import { statusConfigs } from '@cores/status-nodes';
+import { getLimits, getUsageSnapshot, withPending } from '@usage';
 import {
     generateRemark,
     generateWsPath,
@@ -10,7 +12,7 @@ import {
     selectSniHost
 } from '@utils';
 
-export async function getURLConfigs() {
+export async function getURLConfigs(statusEnv?: Env) {
     const {
         fingerprint,
         ports,
@@ -114,7 +116,14 @@ export async function getURLConfigs() {
     }
 
     const customConfs = customConfigs.join('\n') + await fetchCustomSubs(customSubs);
-    const configs = base64EncodeUtf8(VLConfs + TRConfs + chainConfig + customConfs);
+
+    // Quota and expiry notices ride at the top of the list, where a client
+    // shows them first.
+    const status = statusEnv
+        ? statusConfigs(await getLimits(statusEnv), withPending(await getUsageSnapshot(statusEnv)), vlUUID)
+        : '';
+
+    const configs = base64EncodeUtf8(status + VLConfs + TRConfs + chainConfig + customConfs);
 
     return new Response(configs, {
         status: 200,

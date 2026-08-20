@@ -60,7 +60,7 @@ async function routeSubscription(request: Request, env: Env): Promise<Response> 
             switch (client) {
                 case 'xray':
                 case 'sing-box':
-                    return getURLConfigs();
+                    return getURLConfigs(env);
 
                 default:
                     break;

@@ -97,6 +97,11 @@ export function defaultLimits(subToken: string): PanelLimits {
     return {
         displayName: '',
         subToken,
+        panelHost: '',
+        panelPath: '',
+        showStatusNodes: true,
+        zagiroName: '',
+        wizardKey: '',
         limitTotalBytes: 0,
         limitDailyBytes: 0,
         downSpeedKbps: 0,
