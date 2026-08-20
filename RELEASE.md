@@ -1,5 +1,10 @@
 # ZAGROOO Panel
 
+## 1.0.1
+
+- Fixed the Limits section in the admin panel: it called the API one path
+  level too high, which dropped the secure path and returned Not Found.
+
 Deployed and managed by the [ZAGROOO Wizard](https://github.com/rexteamiran/ZAG-Wizard).
 
 ## What is new
