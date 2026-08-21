@@ -249,6 +249,12 @@ export interface PanelLimits {
     isPaused: boolean;
     pauseReason: string;
     pausedAt: number;
+    /**
+     * What caused the pause. A manual pause is sticky; an automatic one is
+     * re-derived on every access check, so topping up a quota or extending an
+     * expiry brings the panel back without anyone having to press Resume.
+     */
+    pausedBy: PauseCause;
     monthlyReset: boolean;
     /** Day of month, 1-28. */
     monthlyResetDay: number;
@@ -278,6 +284,8 @@ export interface UsageSnapshot {
     history: DayUsage[];
     updatedAt: number;
 }
+
+export type PauseCause = '' | 'manual' | 'expired' | 'quota' | 'daily-quota';
 
 export type AccessDenialReason = 'paused' | 'expired' | 'quota' | 'daily-quota' | null;
 

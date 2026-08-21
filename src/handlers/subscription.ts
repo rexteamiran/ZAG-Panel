@@ -4,6 +4,7 @@ import { getSbCustomConfig, getSbWarpConfig } from '@cores/sing-box/configs';
 import { getXrCustomConfigs, getXrWarpConfigs } from '@cores/xray/configs';
 import { setSettings, getGlobals, getKvSettings, getSharedSettings, clients, subscriptions } from '@settings';
 import { fallback } from './utils';
+import { decideRoute } from './formats';
 import { getWireguardConfigs } from '@cores/wireguard';
 import { decompressGzipBase64, HttpStatus } from '@common';
 import { SharedSettings } from '#types/settings';
@@ -15,8 +16,11 @@ export async function handleSubscriptions(request: Request, env: Env): Promise<R
     const response = await routeSubscription(request, env);
 
     // Clients read these off any subscription fetch to draw their own usage
-    // bar, so they ride along with every format, not just the portal.
+    // bar, so they ride along with every format, not just the portal — but
+    // only on a real subscription. Stamping them onto a 404 or the operator's
+    // decoy fallback page leaked the customer's byte counts to whoever asked.
     if (response.headers.has('subscription-userinfo')) return response;
+    if (!response.ok) return response;
 
     const headers = new Headers(response.headers);
     for (const [key, value] of Object.entries(await subscriptionHeaders(env))) {
@@ -40,85 +44,55 @@ async function routeSubscription(request: Request, env: Env): Promise<Response> 
         return renderPortal(env);
     }
 
-    switch (path) {
-        case 'normal':
-            switch (client) {
-                case 'xray':
-                    return getXrCustomConfigs(false);
+    const decision = decideRoute(path, client);
 
-                case 'sing-box':
-                    return getSbCustomConfig(false);
-
-                case 'clash':
-                    return getClNormalConfig();
-
-                default:
-                    break;
-            }
-
-        case 'raw':
-            switch (client) {
-                case 'xray':
-                case 'sing-box':
-                    return getURLConfigs(env);
-
-                default:
-                    break;
-            }
-
-        case 'fragment':
-            switch (client) {
-                case 'xray':
-                    return getXrCustomConfigs(true);
-
-                case 'sing-box':
-                    return getSbCustomConfig(true);
-
-                default:
-                    break;
-            }
-
-        case 'warp':
-            switch (client) {
-                case 'xray':
-                    return getXrWarpConfigs(false, false);
-
-                case 'sing-box':
-                    return getSbWarpConfig();
-
-                case 'clash':
-                    return getClWarpConfig(false);
-
-                case 'wireguard':
-                    return getWireguardConfigs(false);
-
-                default:
-                    break;
-            }
-
-        case 'warp-pro':
-            switch (client) {
-                case 'xray':
-                    return getXrWarpConfigs(true, false);
-
-                case 'xray-knocker':
-                    return getXrWarpConfigs(true, true);
-
-                case 'clash':
-                    return getClWarpConfig(true);
-
-                case 'amnezia':
-                    return getWireguardConfigs(true);
-
-                default:
-                    break;
-            }
-
-        case 'share-settings':
+    switch (decision.kind) {
+        case 'share':
             return shareSettings();
 
-        default:
+        case 'unknown':
             return fallback(request);
+
+        case 'unsupported':
+            // This used to fall through to the next format, and eventually to
+            // share-settings, which handed the customer the operator's own
+            // settings. Say what is wrong instead.
+            return new Response(
+                client
+                    ? `Client "${client}" does not support the "${decision.format}" format. Supported: ${decision.supported.join(', ')}.`
+                    : `Missing ?app= parameter. Supported clients for "${decision.format}": ${decision.supported.join(', ')}.`,
+                { status: HttpStatus.BAD_REQUEST, headers: { 'Content-Type': 'text/plain; charset=utf-8' } }
+            );
+
+        case 'config':
+            return buildConfig(decision.format, decision.client, env);
+    }
+}
+
+function buildConfig(format: string, client: string, env: Env): Promise<Response> | Response {
+    switch (format) {
+        case 'normal':
+            if (client === 'xray') return getXrCustomConfigs(false);
+            if (client === 'sing-box') return getSbCustomConfig(false);
+            return getClNormalConfig();
+
+        case 'fragment':
+            return client === 'xray' ? getXrCustomConfigs(true) : getSbCustomConfig(true);
+
+        case 'raw':
+            return getURLConfigs(env);
+
+        case 'warp':
+            if (client === 'xray') return getXrWarpConfigs(false, false);
+            if (client === 'sing-box') return getSbWarpConfig();
+            if (client === 'clash') return getClWarpConfig(false);
+            return getWireguardConfigs(false);
+
+        default:
+            if (client === 'xray') return getXrWarpConfigs(true, false);
+            if (client === 'xray-knocker') return getXrWarpConfigs(true, true);
+            if (client === 'clash') return getClWarpConfig(true);
+            return getWireguardConfigs(true);
     }
 }
 
@@ -186,7 +160,7 @@ async function renderPortal(env: Env): Promise<Response> {
             history: usageHistory(usage, 30)
         },
         links: {
-            auto: `${base}/${securePath}/sub/normal`,
+            auto: `${base}/${securePath}/sub/normal?app=xray`,
             raw: `${base}/${securePath}/sub/raw?app=xray`,
             qrEndpoint: `${base}/${securePath}/qrcode`,
             subscriptions: subs

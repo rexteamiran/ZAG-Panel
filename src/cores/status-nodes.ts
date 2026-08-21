@@ -23,7 +23,13 @@ const QUOTA_NOTICE_THRESHOLD = 0.75;
 const EXPIRY_NOTICE_DAYS = 7;
 
 function daysLeft(expireAt: number): number {
-    return Math.ceil((expireAt - Date.now()) / 86_400_000);
+    const remaining = expireAt - Date.now();
+    if (remaining <= 0) return -1;
+
+    // Math.ceil yields -0 for anything expired within the last 24 hours, and
+    // -0 is neither less than 0 nor distinguishable from 0 — which showed an
+    // already-dead subscription as "Expires today" for a whole day.
+    return Math.ceil(remaining / 86_400_000);
 }
 
 /**
@@ -69,25 +75,31 @@ export function statusLines(limits: PanelLimits, usage: UsageSnapshot): string[]
  * Status lines as subscription URLs, ready to prepend to a raw subscription.
  * Returns '' when there is nothing to show.
  */
-export function statusConfigs(limits: PanelLimits, usage: UsageSnapshot, uuid: string): string {
+export function statusConfigs(
+    limits: PanelLimits,
+    usage: UsageSnapshot,
+    // Accepts either shape: the KV setting is a comma-joined string, while the
+    // cores work with the parsed list from getProtocols().
+    credentials: { uuid: string; trojanPass: string; protocols: string | readonly string[] }
+): string {
     const lines = statusLines(limits, usage);
     if (!lines.length) return '';
 
+    // Match whatever the panel actually serves, so the note lands in the
+    // client's list rather than being dropped as an unparseable entry.
+    const useVless = credentials.protocols.includes(_VL_);
+    const scheme = useVless ? _VL_ : _TR_;
+
     return lines.map(line => {
-        const config = new URL(`${_VL_}://config`);
-        config.username = uuid;
+        const config = new URL(`${scheme}://config`);
+        config.username = useVless ? credentials.uuid : credentials.trojanPass;
         config.hostname = UNROUTABLE_HOST;
         config.port = String(UNROUTABLE_PORT);
-        config.searchParams.append('encryption', 'none');
+        if (useVless) config.searchParams.append('encryption', 'none');
         config.searchParams.append('security', 'none');
         config.searchParams.append('type', 'ws');
         config.hash = line;
 
         return config.href;
     }).join('\n') + '\n';
-}
-
-/** Status lines as client-agnostic tags, for cores that build named outbounds. */
-export function statusTags(limits: PanelLimits, usage: UsageSnapshot): string[] {
-    return statusLines(limits, usage);
 }

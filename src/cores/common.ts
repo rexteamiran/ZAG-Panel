@@ -120,7 +120,11 @@ export async function getURLConfigs(statusEnv?: Env) {
     // Quota and expiry notices ride at the top of the list, where a client
     // shows them first.
     const status = statusEnv
-        ? statusConfigs(await getLimits(statusEnv), withPending(await getUsageSnapshot(statusEnv)), vlUUID)
+        ? statusConfigs(
+            await getLimits(statusEnv),
+            withPending(await getUsageSnapshot(statusEnv)),
+            { uuid: vlUUID, trojanPass: trPass, protocols }
+        )
         : '';
 
     const configs = base64EncodeUtf8(status + VLConfs + TRConfs + chainConfig + customConfs);

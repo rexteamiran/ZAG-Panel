@@ -2,8 +2,8 @@ import { HttpStatus } from '@common';
 import { TrOverWSHandler } from '@protocols/trojan';
 import { VlOverWSHandler } from '@protocols/vless';
 import { getGlobals } from '@settings';
-import { deviceLimitExceeded, evaluateAccess, setActiveLimits, touchDevice } from '@limits';
-import { bindContext, getLimits, getUsageSnapshot, saveLimits, withPending } from '@usage';
+import { deviceLimitExceeded, evaluateAccess, pauseCauseFor, setActiveLimits, touchDevice } from '@limits';
+import { bindContext, getLimits, getUsageSnapshot, maybeRollMonth, saveLimits, withPending } from '@usage';
 import { notifyAutoPause } from '@api/telegram';
 import { fallback } from './utils';
 
@@ -13,17 +13,35 @@ export async function handleWebsocket(request: Request, env: Env, ctx?: Executio
 
     try {
         bindContext(env, ctx);
-        const limits = await getLimits(env);
+        let limits = await getLimits(env);
+
+        // Roll the month before deciding, not only when traffic flows. A panel
+        // that hit its quota refuses traffic, so a flush-only reset could never
+        // fire and the subscription stayed dead through its own renewal.
+        if (await maybeRollMonth(env, limits)) {
+            limits = await getLimits(env);
+        }
+
         setActiveLimits(limits);
 
         const usage = withPending(await getUsageSnapshot(env));
         const verdict = evaluateAccess(limits, usage);
 
         if (!verdict.allowed) {
-            // Flip the panel to paused on the first refusal so the portal, the
-            // API and the Telegram bot all report the same state.
-            if (!limits.isPaused && verdict.reason !== 'daily-quota') {
-                const paused = { ...limits, isPaused: true, pauseReason: verdict.message, pausedAt: Date.now() };
+            // Record why, so the state the portal and the wizard show matches
+            // the reason, and so an automatic pause can lift itself later.
+            const cause = pauseCauseFor(verdict.reason);
+            const alreadyRecorded = limits.isPaused && limits.pausedBy === cause;
+
+            if (!alreadyRecorded && cause !== 'daily-quota') {
+                const paused = {
+                    ...limits,
+                    isPaused: true,
+                    pauseReason: verdict.message,
+                    pausedBy: cause,
+                    pausedAt: Date.now()
+                };
+
                 const task = (async () => {
                     await saveLimits(env, paused);
                     await notifyAutoPause(env, verdict.message);
@@ -33,6 +51,15 @@ export async function handleWebsocket(request: Request, env: Env, ctx?: Executio
             }
 
             return new Response(verdict.message, { status: HttpStatus.FORBIDDEN });
+        }
+
+        // The gate allowed this, so any automatic pause no longer applies —
+        // a quota was raised, an expiry extended, or the month rolled over.
+        if (limits.isPaused) {
+            const revived = { ...limits, isPaused: false, pauseReason: '', pausedBy: '' as const, pausedAt: 0 };
+            const task = saveLimits(env, revived).catch(error => console.log('Auto-resume failed:', error));
+            ctx ? ctx.waitUntil(task) : void task;
+            setActiveLimits(revived);
         }
 
         const clientIp = request.headers.get('cf-connecting-ip') ?? '';

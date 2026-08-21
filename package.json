@@ -1,6 +1,6 @@
 {
     "name": "zagrooo-panel",
-    "version": "1.1.0",
+    "version": "1.2.0",
     "homepage": "https://github.com/rexteamiran/ZAG-Panel",
     "license": "GPL-3.0",
     "private": true,
@@ -8,7 +8,8 @@
     "scripts": {
         "check": "tsc --noEmit",
         "build": "node scripts/build.js",
-        "build-dev": "node scripts/build-dev.js"
+        "build-dev": "node scripts/build-dev.js",
+        "test": "node --test tests/*.test.mjs"
     },
     "devDependencies": {
         "@cloudflare/workers-types": "^4.20260603.1",

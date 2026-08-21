@@ -26,7 +26,14 @@ export async function getDataset(env: Env): Promise<{
         }
 
         if (VERSION !== settings.panelVersion) {
-            settings = await updateDataset(env);
+            // Migrate, don't reset. The no-argument call writes the factory
+            // defaults, which on a cold isolate is exactly what getKvSettings()
+            // still holds — that wiped the operator's DNS, ports, clean IPs and
+            // routing rules on the first request after every upgrade. Passing
+            // the stored record takes the merge branch, which carries values
+            // forward, fills in any field the new version added, and is the
+            // only branch that advances panelVersion.
+            settings = await updateDataset(env, settings as PanelSettings);
         }
 
         let telegramBot: TelegramBot | null = await env.kv.get('telegramBot', { type: 'json' });

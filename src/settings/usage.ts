@@ -111,6 +111,7 @@ export function defaultLimits(subToken: string): PanelLimits {
         isPaused: false,
         pauseReason: '',
         pausedAt: 0,
+        pausedBy: '',
         monthlyReset: false,
         monthlyResetDay: 1,
         alertQuota: false,
@@ -174,6 +175,7 @@ export async function saveLimits(env: Env, limits: PanelLimits): Promise<PanelLi
     return limits;
 }
 
+/** Used by tests and by the settings-reset path. */
 export function invalidateLimitsCache(): void {
     limitsCache = null;
     limitsCachedAt = 0;
@@ -184,6 +186,7 @@ export function invalidateLimitsCache(): void {
    ========================================================================== */
 
 let usageCache: UsageSnapshot | null = null;
+let usageCachedAt = 0;
 let pendingUp = 0;
 let pendingDown = 0;
 let lastFlush = 0;
@@ -194,8 +197,16 @@ function rollDay(usage: UsageSnapshot): UsageSnapshot {
     if (usage.day === day) return usage;
 
     if (usage.day && usage.dailyBytes > 0) {
-        const history: DayUsage[] = [...usage.history, { d: usage.day, b: usage.dailyBytes }];
-        usage.history = history.slice(-HISTORY_DAYS);
+        // Another isolate may already have archived this day; keep the larger
+        // figure rather than appending a duplicate the chart would discard.
+        const existing = usage.history.find(entry => entry.d === usage.day);
+
+        if (existing) {
+            existing.b = Math.max(existing.b, usage.dailyBytes);
+        } else {
+            const history: DayUsage[] = [...usage.history, { d: usage.day, b: usage.dailyBytes }];
+            usage.history = history.slice(-HISTORY_DAYS);
+        }
     }
 
     usage.dailyBytes = 0;
@@ -218,10 +229,21 @@ function rollMonth(usage: UsageSnapshot, limits: PanelLimits): boolean {
     return true;
 }
 
-export async function getUsageSnapshot(env: Env): Promise<UsageSnapshot> {
-    if (!usageCache) {
+/**
+ * Cloudflare spreads connections across isolates, each with its own copy of
+ * this cache. Without a re-read, the isolate that flushes last overwrites
+ * every other isolate's counting with its own stale baseline. The limits cache
+ * has had a TTL for exactly this reason; usage needs one more, not less.
+ */
+const USAGE_TTL_MS = 20_000;
+
+export async function getUsageSnapshot(env: Env, forceRead = false): Promise<UsageSnapshot> {
+    const stale = Date.now() - usageCachedAt >= USAGE_TTL_MS;
+
+    if (!usageCache || forceRead || stale) {
         const stored = await storeGet<Partial<UsageSnapshot>>(env, USAGE_KEY);
         usageCache = stored ? { ...emptyUsage(), ...stored, history: stored.history ?? [] } : emptyUsage();
+        usageCachedAt = Date.now();
     }
 
     return rollDay(usageCache);
@@ -262,31 +284,90 @@ export function pendingBytes(): number {
  * Merges buffered bytes into the snapshot and persists it.
  * Returns the merged snapshot, or null when the flush was skipped.
  */
+/**
+ * Serialises flushes into a queue.
+ *
+ * scheduleFlush() fires from the relay per chunk and is never awaited, so
+ * without this two flushes both read the stored snapshot, both merge their own
+ * bytes into it, and the second overwrites the first — losing a whole batch.
+ *
+ * Waiting for the in-flight flush is not enough: every waiter then resumes at
+ * once and races the same way. Each call instead chains onto the previous one,
+ * so they run strictly in turn.
+ */
+let flushQueue: Promise<UsageSnapshot | null> = Promise.resolve(null);
+
+async function mergeAndStore(env: Env, limits?: PanelLimits): Promise<UsageSnapshot | null> {
+    // Claim whatever accumulated, including anything counted while earlier
+    // flushes in the queue were running.
+    const up = pendingUp;
+    const down = pendingDown;
+    if (!up && !down) return usageCache;
+
+    pendingUp = 0;
+    pendingDown = 0;
+    lastFlush = Date.now();
+
+    // Read immediately before merging, so writes another isolate made since
+    // this one last looked are carried forward rather than overwritten.
+    const usage = await getUsageSnapshot(env, true);
+
+    usage.upBytes += up;
+    usage.downBytes += down;
+    usage.totalBytes += up + down;
+    usage.dailyBytes += up + down;
+    usage.updatedAt = Date.now();
+
+    const effectiveLimits = limits ?? limitsCache;
+    if (effectiveLimits) rollMonth(usage, effectiveLimits);
+
+    try {
+        await storePut(env, USAGE_KEY, usage);
+    } catch (error) {
+        // Give the bytes back rather than dropping them on the floor.
+        pendingUp += up;
+        pendingDown += down;
+        throw error;
+    }
+
+    usageCache = usage;
+    usageCachedAt = Date.now();
+    return usage;
+}
+
 export async function flushUsage(env: Env, limits?: PanelLimits, force = false): Promise<UsageSnapshot | null> {
     const pending = pendingUp + pendingDown;
     const now = Date.now();
     const due = force || pending >= FLUSH_BYTES || (pending > 0 && now - lastFlush >= FLUSH_INTERVAL_MS);
     if (!due) return null;
 
+    // A rejected flush must not break the chain for everyone behind it.
+    const mine = flushQueue
+        .catch(() => null)
+        .then(() => mergeAndStore(env, limits));
+
+    flushQueue = mine.catch(() => null);
+    return mine;
+}
+
+/**
+ * Rolls the month over on a read, not only on a flush.
+ *
+ * rollMonth used to be reachable only from flushUsage, which only runs when
+ * traffic flows — but a panel that hit its quota is refusing traffic, so the
+ * reset could never fire. Returns true when it rolled.
+ */
+export async function maybeRollMonth(env: Env, limits: PanelLimits): Promise<boolean> {
+    if (!limits.monthlyReset) return false;
+
     const usage = await getUsageSnapshot(env);
-    const up = pendingUp;
-    const down = pendingDown;
-    pendingUp = 0;
-    pendingDown = 0;
-    lastFlush = now;
+    if (!rollMonth(usage, limits)) return false;
 
-    usage.upBytes += up;
-    usage.downBytes += down;
-    usage.totalBytes += up + down;
-    usage.dailyBytes += up + down;
-    usage.updatedAt = now;
-
-    const effectiveLimits = limits ?? limitsCache;
-    if (effectiveLimits) rollMonth(usage, effectiveLimits);
-
+    usage.updatedAt = Date.now();
     usageCache = usage;
+    usageCachedAt = Date.now();
     await storePut(env, USAGE_KEY, usage);
-    return usage;
+    return true;
 }
 
 export async function resetUsage(env: Env, scope: 'all' | 'daily' = 'all'): Promise<UsageSnapshot> {
@@ -308,6 +389,7 @@ export async function resetUsage(env: Env, scope: 'all' | 'daily' = 'all'): Prom
     usage.day = today();
     usage.updatedAt = Date.now();
     usageCache = usage;
+    usageCachedAt = Date.now();
     await storePut(env, USAGE_KEY, usage);
     return usage;
 }

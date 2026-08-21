@@ -34,6 +34,15 @@ const attempts = new Map<string, { count: number; windowStart: number }>();
 
 function rateLimited(ip: string): boolean {
     const now = Date.now();
+
+    // Entries were only ever overwritten, never removed, so the map grew for
+    // the isolate's lifetime. Sweep expired windows occasionally.
+    if (attempts.size > 1000) {
+        for (const [key, value] of attempts) {
+            if (now - value.windowStart > RATE_LIMIT_WINDOW_MS) attempts.delete(key);
+        }
+    }
+
     const record = attempts.get(ip);
 
     if (!record || now - record.windowStart > RATE_LIMIT_WINDOW_MS) {
@@ -78,6 +87,10 @@ async function authenticateApiKey(request: Request, limits: PanelLimits): Promis
    ========================================================================== */
 
 export async function handlePanelApi(request: Request, env: Env): Promise<Response> {
+    return withCors(await routePanelApi(request, env));
+}
+
+async function routePanelApi(request: Request, env: Env): Promise<Response> {
     const { pathname } = getGlobals();
     const route = pathname.split('/')[3] ?? '';
 
@@ -109,8 +122,17 @@ export async function handlePanelApi(request: Request, env: Env): Promise<Respon
         }
 
         if (key) {
-            key.lastUsed = Date.now();
-            await saveLimits(env, limits);
+            // This used to write on every request, including plain GETs. At the
+            // 120 req/min rate limit that exhausts a KV-only panel's 1 000
+            // writes/day in about nine minutes, after which usage flushes stop
+            // persisting too. Hourly resolution is all this field is read at.
+            const LAST_USED_RESOLUTION_MS = 60 * 60 * 1000;
+            const now = Date.now();
+
+            if (now - (key.lastUsed ?? 0) > LAST_USED_RESOLUTION_MS) {
+                key.lastUsed = now;
+                await saveLimits(env, limits);
+            }
         }
 
         switch (route) {
@@ -148,6 +170,16 @@ export async function handlePanelApi(request: Request, env: Env): Promise<Respon
     } catch (error) {
         return respond(false, HttpStatus.INTERNAL_SERVER_ERROR, `API error: ${safeError(error)}`);
     }
+}
+
+/**
+ * The preflight already answered with CORS, so the real response needs it too
+ * — otherwise the browser passes the preflight and then blocks the answer.
+ */
+function withCors(response: Response): Response {
+    const headers = new Headers(response.headers);
+    for (const [key, value] of Object.entries(corsHeaders())) headers.set(key, value);
+    return new Response(response.body, { status: response.status, headers });
 }
 
 function corsHeaders(): Record<string, string> {
@@ -241,6 +273,7 @@ async function patchLimits(request: Request, env: Env, limits: PanelLimits): Pro
 
     if (body.displayName !== undefined) next.displayName = String(body.displayName).slice(0, 64);
     if (body.monthlyReset !== undefined) next.monthlyReset = Boolean(body.monthlyReset);
+    if (body.showStatusNodes !== undefined) next.showStatusNodes = Boolean(body.showStatusNodes);
     if (body.alertQuota !== undefined) next.alertQuota = Boolean(body.alertQuota);
     if (body.alertExpiry !== undefined) next.alertExpiry = Boolean(body.alertExpiry);
 
@@ -293,6 +326,13 @@ async function doResetUsage(request: Request, env: Env): Promise<Response> {
     const body = await request.json().catch(() => ({})) as { scope?: string };
     const scope = body.scope === 'daily' ? 'daily' : 'all';
     const usage = await resetUsage(env, scope);
+
+    // Zeroing the counters removes the reason the panel paused itself, so it
+    // must not stay dead until someone separately presses Resume.
+    const limits = await getLimits(env);
+    if (limits.isPaused && limits.pausedBy && limits.pausedBy !== 'manual') {
+        await saveLimits(env, { ...limits, isPaused: false, pauseReason: '', pausedBy: '', pausedAt: 0 });
+    }
 
     return respond(true, HttpStatus.OK, `Usage reset (${scope}).`, {
         total: usage.totalBytes,

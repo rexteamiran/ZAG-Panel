@@ -1,5 +1,41 @@
 # ZAGROOO Panel
 
+## 1.2.0 — security and correctness
+
+### Fixed: a subscription link could hand out your own settings
+
+The subscription router fell through between formats. A request to
+`/sub/normal` with no `?app=` — the exact link the subscriber portal
+advertised as its main one — ended up returning the settings export, including
+chain-proxy and upstream-proxy credentials, proxy IPs and prefixes.
+
+**Update as soon as you can, and treat any credential that was in your proxy
+settings as exposed.**
+
+### Fixed: upgrading a panel wiped its settings
+
+On the first request after a version change, a panel could overwrite its own
+DNS, ports, clean IPs, chain proxy, routing rules and custom subscriptions with
+factory defaults. Upgrades now migrate rather than reset.
+
+### Other fixes
+
+- Usage accounting no longer loses bytes when several connections flush at
+  once, and no longer undercounts when more than one isolate is live.
+- A panel that paused itself on a quota or an expiry now comes back on its own
+  once the quota is raised, the expiry extended, or the month rolls over. A
+  pause you asked for still sticks.
+- Monthly reset now works on a panel that has already hit its quota.
+- Status notes no longer read "expires today" for a day after expiry, and are
+  built with the protocol the panel actually serves.
+- API responses carry CORS headers, so the wizard can read them.
+- An API key no longer writes to storage on every request — that used to
+  exhaust a KV-only panel's free write quota in about nine minutes.
+- A malformed chain proxy reports a validation error instead of a 500.
+- A missing client IP no longer locks a customer out of a device-limited panel.
+- Usage headers are no longer stamped onto 404 and fallback responses.
+
+
 ## 1.1.0
 
 - **Status notes in the client**: the subscription can carry unroutable

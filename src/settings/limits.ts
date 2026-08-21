@@ -1,11 +1,16 @@
-import { AccessVerdict, PanelLimits, PanelStatus, UsageSnapshot } from '#types/settings';
+import { AccessDenialReason, AccessVerdict, PanelLimits, PanelStatus, PauseCause, UsageSnapshot } from '#types/settings';
 
 /* ==========================================================================
    Access gating
    ========================================================================== */
 
 export function evaluateAccess(limits: PanelLimits, usage: UsageSnapshot): AccessVerdict {
-    if (limits.isPaused) {
+    // A pause the operator asked for is final. An automatic one is not: it is
+    // re-derived below, so raising a quota or extending an expiry revives the
+    // panel on its own. Without this, a panel that hit its quota stayed dead
+    // even after a monthly reset, because the reset only ran on traffic the
+    // panel was by then refusing.
+    if (limits.isPaused && (limits.pausedBy === 'manual' || !limits.pausedBy)) {
         return {
             allowed: false,
             reason: 'paused',
@@ -38,6 +43,16 @@ export function evaluateAccess(limits: PanelLimits, usage: UsageSnapshot): Acces
     }
 
     return { allowed: true, reason: null, message: '' };
+}
+
+/** The cause to record when the gate refuses a connection. */
+export function pauseCauseFor(reason: AccessDenialReason): PauseCause {
+    switch (reason) {
+        case 'expired': return 'expired';
+        case 'quota': return 'quota';
+        case 'daily-quota': return 'daily-quota';
+        default: return 'manual';
+    }
 }
 
 export function panelStatus(limits: PanelLimits, usage: UsageSnapshot): PanelStatus {
@@ -137,6 +152,13 @@ export function activeDevices(): number {
 
 export function deviceLimitExceeded(ip: string, maxDevices: number): boolean {
     if (!maxDevices || maxDevices <= 0) return false;
+
+    // Without an IP there is nothing to count, and touchDevice() ignores the
+    // empty string — so counting it would refuse every such request once the
+    // limit was reached. Fail open rather than locking a customer out over a
+    // missing header.
+    if (!ip) return false;
+
     const cutoff = Date.now() - DEVICE_TTL_MS;
     for (const [seenIp, seen] of devices) {
         if (seen < cutoff) devices.delete(seenIp);

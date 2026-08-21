@@ -288,7 +288,15 @@ function validateChainProxy(form: PanelSettings, errors: ValidationError[]) {
         });
     }
 
-    const config = new URL(chainProxy);
+    // new URL throws on a malformed value, and the regex above has already
+    // recorded that as a validation error — letting it throw turned a 400 into
+    // a 500 with "Invalid URL" and no field name.
+    let config: URL;
+    try {
+        config = new URL(chainProxy);
+    } catch {
+        return;
+    }
     let { protocol, username } = config;
     let security = config.searchParams.get('security');
     let type = config.searchParams.get('type');
