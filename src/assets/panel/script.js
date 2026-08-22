@@ -1423,3 +1423,254 @@ async function revokeApiKey(id) {
         notify('error', 'Revoke key', [`Failed: ${error}`]);
     }
 }
+
+/* ==========================================================================
+   ZAGROOO templates
+
+   Ready-made setups for the operator who does not want to read 97 fields.
+   Picking one only fills the form — the existing Apply button still does the
+   saving, so every change goes through the same validation as before and
+   nothing new can corrupt a panel.
+
+   Ticking "Show" publishes a template to the customer's subscription page,
+   where it gets its own link.
+   ========================================================================== */
+
+let templateData = { templates: [], enabled: [], custom: [] };
+
+loadTemplates();
+
+async function loadTemplates() {
+    try {
+        const res = await fetch(`${limitsApi('templates')}?nocache=${Date.now()}`, { cache: 'no-store' });
+        const { success, body } = await res.json();
+        if (!success) return;
+
+        templateData = body;
+        renderTemplates();
+    } catch (error) {
+        console.error('Templates load error:', error);
+    }
+}
+
+function templateLang() {
+    return document.documentElement.lang === 'fa' ? 'fa' : 'en';
+}
+
+function localised(value) {
+    if (!value) return '';
+    return typeof value === 'string' ? value : (value[templateLang()] || value.en || '');
+}
+
+function renderTemplates() {
+    const list = document.getElementById('templateList');
+    if (!list) return;
+
+    const family = document.getElementById('templateFamily').value;
+    const enabled = new Set(templateData.enabled || []);
+
+    const visible = (templateData.templates || []).filter(template => {
+        if (family && template.family !== family) return false;
+
+        // Some templates only make sense on a workers.dev panel, and the ports
+        // they set would be silently dropped anywhere else.
+        if (template.requiresOrigin && !location.hostname.endsWith(template.requiresOrigin)) return false;
+        return true;
+    });
+
+    if (!visible.length) {
+        list.innerHTML = '<p class="template-intro">No templates in this family.</p>';
+        return;
+    }
+
+    list.innerHTML = visible.map(template => `
+        <div class="template-card">
+            <h4>${escapeTemplateHtml(localised(template.name))}
+                ${template.builtIn ? '' : '<span class="template-badge">yours</span>'}</h4>
+            <p>${escapeTemplateHtml(localised(template.description))}</p>
+            ${template.warning
+            ? `<p class="template-warning">⚠️ ${escapeTemplateHtml(localised(template.warning))}</p>`
+            : ''}
+            <div class="template-card-actions">
+                <button type="button" class="button" onclick="useTemplate('${template.id}')">
+                    <span class="material-symbols-rounded">tune</span>
+                    Use
+                </button>
+                <label class="template-show">
+                    <input type="checkbox" ${enabled.has(template.id) ? 'checked' : ''}
+                        onchange="toggleTemplate('${template.id}', this.checked)">
+                    Show
+                </label>
+                ${template.builtIn
+            ? ''
+            : `<button type="button" class="button delete" onclick="deleteTemplate('${template.id}')">
+                        <span class="material-symbols-rounded">delete</span>
+                       </button>`}
+            </div>
+        </div>
+    `).join('');
+}
+
+function escapeTemplateHtml(value) {
+    return String(value).replace(/[&<>"']/g, char => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    })[char]);
+}
+
+/**
+ * Loads a template into the form without saving it.
+ *
+ * Deliberately the same path importFileSettings uses, so the form is rendered
+ * by the code that already knows how to do it, and the operator still reviews
+ * everything and presses Apply.
+ */
+function useTemplate(id) {
+    const template = (templateData.templates || []).find(entry => entry.id === id);
+    if (!template) return;
+
+    const merged = { ...validateSettings(), ...template.settings };
+    renderPanel(merged);
+
+    const lines = ['The fields below are filled in. Review them, then press Apply in Proxy Settings to save.'];
+    if (template.warning) lines.push(`⚠️ ${localised(template.warning)}`);
+
+    notify('info', `Template: ${localised(template.name)}`, lines);
+}
+
+async function toggleTemplate(id, show) {
+    const enabled = new Set(templateData.enabled || []);
+    show ? enabled.add(id) : enabled.delete(id);
+
+    await saveTemplateStore({ enabled: [...enabled] }, show
+        ? 'Customers can now choose this setup.'
+        : 'Removed from the subscription page.');
+}
+
+async function saveCurrentAsTemplate() {
+    const name = prompt('Name this template — your customers will see it:');
+    if (!name || !name.trim()) return;
+
+    const description = prompt('One line describing when to use it (optional):') || '';
+
+    // Whatever is in the form right now, cleaned server-side of anything that
+    // must not travel between panels.
+    const settings = validateSettings();
+    if (!settings) return;
+
+    const custom = [...(templateData.custom || []), {
+        id: `custom-${Date.now().toString(36)}`,
+        name: name.trim(),
+        description: description.trim(),
+        createdAt: Date.now(),
+        settings
+    }];
+
+    await saveTemplateStore({ custom }, 'Template saved.');
+}
+
+async function deleteTemplate(id) {
+    const confirmed = await notify('confirm', 'Delete template', [
+        'This removes the template and its subscription link.'
+    ]);
+    if (!confirmed) return;
+
+    const custom = (templateData.custom || []).filter(template => template.id !== id);
+    const enabled = (templateData.enabled || []).filter(entry => entry !== id);
+
+    await saveTemplateStore({ custom, enabled }, 'Template deleted.');
+}
+
+async function saveTemplateStore(patch, okMessage) {
+    try {
+        const res = await fetch(limitsApi('templates'), {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                enabled: patch.enabled ?? templateData.enabled,
+                custom: patch.custom ?? templateData.custom
+            })
+        });
+
+        const { success, message, body } = await res.json();
+        if (!success) {
+            notify('error', 'Templates', [message || 'Failed.']);
+            return;
+        }
+
+        templateData.enabled = body.enabled;
+        templateData.custom = body.custom;
+        await loadTemplates();
+
+        // The server reports anything it had to strip; say so rather than
+        // pretending the save was exactly what was asked for.
+        notify('success', 'Templates', [okMessage, message && message !== 'Templates saved.' ? message : '']
+            .filter(Boolean));
+    } catch (error) {
+        notify('error', 'Templates', [`Failed: ${error}`]);
+    }
+}
+
+function exportTemplates() {
+    const backup = {
+        kind: 'zagrooo-templates',
+        version: 1,
+        exportedAt: new Date().toISOString(),
+        enabled: templateData.enabled || [],
+        custom: templateData.custom || []
+    };
+
+    const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+
+    link.href = url;
+    link.download = `zagrooo-templates-${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+async function importTemplates(event) {
+    const file = event.target.files && event.target.files[0];
+    event.target.value = '';
+    if (!file) return;
+
+    let backup;
+    try {
+        backup = JSON.parse(await file.text());
+    } catch (error) {
+        notify('error', 'Import templates', ['That file is not valid JSON.']);
+        return;
+    }
+
+    if (backup.kind !== 'zagrooo-templates' || !Array.isArray(backup.custom)) {
+        notify('error', 'Import templates', ['That does not look like a ZAGROOO template backup.']);
+        return;
+    }
+
+    const merge = await notify('confirm', 'Import templates', [
+        `This file has ${backup.custom.length} template(s).`,
+        'OK adds them to what you already have. Cancel replaces everything.'
+    ]);
+
+    try {
+        const res = await fetch(limitsApi('templates'), {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                custom: backup.custom,
+                enabled: backup.enabled || templateData.enabled,
+                merge: Boolean(merge)
+            })
+        });
+
+        const { success, message } = await res.json();
+        notify(success ? 'success' : 'error', 'Import templates', [message || 'Done.']);
+        if (success) await loadTemplates();
+    } catch (error) {
+        notify('error', 'Import templates', [`Failed: ${error}`]);
+    }
+}
+
+document.getElementById('templateFamily')?.addEventListener('change', renderTemplates);

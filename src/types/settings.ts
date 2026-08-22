@@ -120,6 +120,13 @@ export interface SharedSettings extends
     > { }
 
 export interface PanelSettings extends KvSettings, MainSettings { };
+
+/**
+ * Everything a config builder can read: the stored settings, the values baked
+ * into the deployed script, and the facts about the request in flight.
+ * This is what getSettings() returns and what a template overlay is applied to.
+ */
+export type RuntimeSettings = KvSettings & EmbededSettings & ReqSettings;
 export interface ReqSettings {
     httpPorts: number[];
     httpsPorts: number[];
@@ -131,7 +138,9 @@ export interface ReqSettings {
 }
 
 export type LogLevel = 'none' | 'warning' | 'error' | 'info' | 'debug';
-export type FragmentMode = 'custom' | 'low' | 'medium' | 'high';
+// 'severe' is offered by the panel UI and implemented in script.js; it was
+// missing here, so selecting it wrote a value the type did not allow.
+export type FragmentMode = 'custom' | 'low' | 'medium' | 'high' | 'severe';
 export type FragmentPacket = 'tlshello' | '1-1' | '1-2' | '1-3' | '1-5';
 export type Fingerprint =
     | 'chrome'

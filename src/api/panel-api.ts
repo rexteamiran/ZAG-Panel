@@ -16,6 +16,14 @@ import {
     withPending
 } from '@usage';
 import { fallback } from '@handlers/utils';
+import { settingsTemplates } from '@templates';
+import {
+    allTemplates,
+    getTemplateStore,
+    sanitiseTemplateSettings,
+    saveTemplateStore,
+    CustomTemplate
+} from '@templates-store';
 
 /* ==========================================================================
    Machine API
@@ -158,6 +166,11 @@ async function routePanelApi(request: Request, env: Env): Promise<Response> {
 
             case 'links':
                 return getLinks(limits);
+
+            case 'templates':
+                return request.method === 'GET'
+                    ? getTemplates(env)
+                    : saveTemplates(request, env);
 
             case 'settings':
                 return request.method === 'GET'
@@ -427,12 +440,21 @@ async function handleKeys(request: Request, env: Env, limits: PanelLimits): Prom
 
 const PER_PANEL_KEYS: Array<keyof KvSettings> = ['customDomain', 'remoteSettings', 'panelVersion'];
 
+/**
+ * Recomputed by updateDataset() from the fields they derive from. Carrying
+ * them between panels writes a stale value that the target will not refresh,
+ * because it only recomputes when the source field changed.
+ */
+const DERIVED_KEYS: Array<keyof KvSettings> = ['remoteDnsHost', 'upstreamParams', 'chainProxyParams'];
+
+const NOT_SHAREABLE = new Set<string>([...PER_PANEL_KEYS, ...DERIVED_KEYS]);
+
 function shareableSettings(): Partial<KvSettings> {
     const settings = getKvSettings();
     const out: Record<string, unknown> = {};
 
     for (const [key, value] of Object.entries(settings)) {
-        if (PER_PANEL_KEYS.includes(key as keyof KvSettings)) continue;
+        if (NOT_SHAREABLE.has(key)) continue;
         out[key] = value;
     }
 
@@ -458,7 +480,7 @@ async function applySettings(request: Request, env: Env): Promise<Response> {
     const applied: string[] = [];
 
     for (const key of known) {
-        if (PER_PANEL_KEYS.includes(key)) continue;
+        if (NOT_SHAREABLE.has(key)) continue;
         if (patch[key] === undefined) continue;
         (merged as any)[key] = patch[key];
         applied.push(key);
@@ -478,4 +500,115 @@ async function applySettings(request: Request, env: Env): Promise<Response> {
     await updateDataset(env, merged);
 
     return respond(true, HttpStatus.OK, `Applied ${applied.length} settings.`, { applied });
+}
+
+/* ==========================================================================
+   Templates
+
+   Built-ins ship inside the worker; custom ones and the customer-visible set
+   live in KV. The admin UI, the subscriber portal and the wizard all read the
+   same list from here.
+   ========================================================================== */
+
+async function getTemplates(env: Env): Promise<Response> {
+    const [store, templates] = await Promise.all([getTemplateStore(env), allTemplates(env)]);
+
+    return respond(true, HttpStatus.OK, '', {
+        templates: templates.map(template => ({
+            id: template.id,
+            family: template.family,
+            name: template.name,
+            description: template.description,
+            warning: template.warning ?? null,
+            requiresOrigin: template.requiresOrigin ?? null,
+            builtIn: settingsTemplates.some(builtIn => builtIn.id === template.id),
+            settings: template.settings
+        })),
+        enabled: store.enabled,
+        custom: store.custom
+    });
+}
+
+/**
+ * Saves the customer-visible set and the operator's own templates.
+ *
+ * This is also the import path, so anything a template must never carry is
+ * stripped here rather than trusted — an imported file is just as untrusted as
+ * a request body.
+ */
+async function saveTemplates(request: Request, env: Env): Promise<Response> {
+    if (request.method !== 'PUT' && request.method !== 'PATCH') {
+        return respond(false, HttpStatus.METHOD_NOT_ALLOWED, 'Use PUT or PATCH.');
+    }
+
+    const body = await request.json().catch(() => null) as {
+        enabled?: unknown;
+        custom?: unknown;
+        merge?: boolean;
+    } | null;
+
+    if (!body) return respond(false, HttpStatus.BAD_REQUEST, 'Expected a JSON body.');
+
+    const current = await getTemplateStore(env);
+    const dropped: string[] = [];
+    const rejected: string[] = [];
+
+    let custom: CustomTemplate[] = current.custom;
+
+    if (Array.isArray(body.custom)) {
+        const cleaned: CustomTemplate[] = [];
+
+        for (const entry of body.custom as any[]) {
+            const name = String(entry?.name ?? '').trim().slice(0, 60);
+
+            if (!name || typeof entry?.settings !== 'object' || entry.settings === null) {
+                rejected.push(name || '(unnamed)');
+                continue;
+            }
+
+            const { settings, dropped: stripped } = sanitiseTemplateSettings(entry.settings);
+            dropped.push(...stripped);
+
+            cleaned.push({
+                id: String(entry.id ?? crypto.randomUUID()),
+                name,
+                description: String(entry.description ?? '').slice(0, 200),
+                createdAt: Number(entry.createdAt) || Date.now(),
+                settings
+            });
+        }
+
+        // An import can add to what is already there rather than replacing it.
+        if (body.merge) {
+            const byId = new Map(current.custom.map(template => [template.id, template]));
+            for (const template of cleaned) byId.set(template.id, template);
+            custom = [...byId.values()];
+        } else {
+            custom = cleaned;
+        }
+    }
+
+    // Only ids that exist, so a deleted template cannot leave a dead link on
+    // the portal.
+    const known = new Set([
+        ...settingsTemplates.map(template => template.id),
+        ...custom.map(template => template.id)
+    ]);
+
+    const enabled = Array.isArray(body.enabled)
+        ? [...new Set((body.enabled as unknown[]).map(String))].filter(id => known.has(id))
+        : current.enabled.filter(id => known.has(id));
+
+    await saveTemplateStore(env, { enabled, custom });
+
+    const notes: string[] = [];
+    if (dropped.length) notes.push(`ignored fields that cannot move between panels: ${[...new Set(dropped)].join(', ')}`);
+    if (rejected.length) notes.push(`skipped ${rejected.length} invalid template(s): ${rejected.join(', ')}`);
+
+    return respond(true, HttpStatus.OK, notes.join('; ') || 'Templates saved.', {
+        enabled,
+        custom,
+        dropped: [...new Set(dropped)],
+        rejected
+    });
 }

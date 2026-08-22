@@ -12,7 +12,7 @@
         href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap"
         rel="stylesheet">
     <link rel="stylesheet"
-        href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&icon_names=add_circle,autorenew,calendar_month,cancel,check_circle,clock_loader_40,close,cloud_download,cloud_upload,code_xml,content_copy,dashboard,data_usage,delete,dns,download,draft,error,fingerprint,help,info,key_vertical,keyboard_arrow_down,link,logout,open_in_new,qr_code,refresh,save,settings,settings_backup_restore,share,smart_toy,terminal,tune,upgrade,upload,verified,visibility,visibility_off&display=block" />
+        href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&icon_names=add_circle,autorenew,bookmark_add,calendar_month,cancel,check_circle,download,tune,upload,clock_loader_40,close,cloud_download,cloud_upload,code_xml,content_copy,dashboard,data_usage,delete,dns,download,draft,error,fingerprint,help,info,key_vertical,keyboard_arrow_down,link,logout,open_in_new,qr_code,refresh,save,settings,settings_backup_restore,share,smart_toy,terminal,tune,upgrade,upload,verified,visibility,visibility_off&display=block" />
     <link id="favicon" rel="icon" type="image/x-icon" href="data:image/x-icon;base64,__ICON__">
     <style>
         /* THEME_PLACEHOLDER */
@@ -299,6 +299,45 @@
             </div>
         </form>
 
+    </div>
+
+
+    <div class="form-container container" id="templates-container">
+        <h2><span class="material-symbols-rounded">tune</span>Templates</h2>
+        <p class="template-intro">
+            Ready-made setups. Choosing one fills the fields below — nothing is saved until you press
+            Apply in Proxy Settings. Tick <b>Show</b> to offer it to your customer on their subscription page.
+        </p>
+
+        <div class="template-toolbar">
+            <select id="templateFamily" class="template-filter">
+                <option value="">All families</option>
+                <option value="network">Network conditions</option>
+                <option value="performance">Performance</option>
+                <option value="client">Client-specific</option>
+                <option value="warp">WARP</option>
+                <option value="rules">Rules &amp; filtering</option>
+                <option value="advanced">Advanced</option>
+            </select>
+            <div class="template-actions">
+                <button type="button" class="button" onclick="saveCurrentAsTemplate()">
+                    <span class="material-symbols-rounded">bookmark_add</span>
+                    Save current as template
+                </button>
+                <button type="button" class="button" onclick="exportTemplates()">
+                    <span class="material-symbols-rounded">download</span>
+                    Backup
+                </button>
+                <button type="button" class="button" onclick="document.getElementById('templateImport').click()">
+                    <span class="material-symbols-rounded">upload</span>
+                    Import
+                </button>
+                <input type="file" id="templateImport" accept="application/json" hidden
+                    onchange="importTemplates(event)">
+            </div>
+        </div>
+
+        <div id="templateList" class="template-list"></div>
     </div>
 
     <div class="form-container container">

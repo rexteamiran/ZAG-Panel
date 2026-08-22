@@ -21,7 +21,11 @@ const I18N = {
         recommended: 'RECOMMENDED',
         copy: 'Copy',
         usageHistory: 'Usage history',
-        linksHint: 'Pick the subscription that matches your client.',
+        linksHint: 'Choose a connection type, then the setup that suits you.',
+        connectionType: 'Connection type',
+        connectionTypeHint: 'Not sure? Leave it on the first one.',
+        noTemplates: 'Your provider has not published any setups yet — use the automatic link above.',
+        forApp: 'For {app}',
         appsHint: 'Supported clients and their minimum versions.',
         rawHint: 'The raw subscription payload, for manual import.',
         tabUsage: 'Usage',
@@ -65,7 +69,11 @@ const I18N = {
         recommended: 'پیشنهادی',
         copy: 'کپی',
         usageHistory: 'تاریخچه مصرف',
-        linksHint: 'لینک متناسب با کلاینت خود را انتخاب کنید.',
+        linksHint: 'اول نوع اتصال را انتخاب کنید، بعد تنظیماتی که به کارتان می‌آید.',
+        connectionType: 'نوع اتصال',
+        connectionTypeHint: 'مطمئن نیستید؟ روی گزینه‌ی اول بگذارید.',
+        noTemplates: 'هنوز تنظیماتی منتشر نشده است — از لینک خودکار بالا استفاده کنید.',
+        forApp: 'برای {app}',
         appsHint: 'کلاینت‌های پشتیبانی‌شده و حداقل نسخه.',
         rawHint: 'محتوای خام اشتراک، برای وارد کردن دستی.',
         tabUsage: 'مصرف',
@@ -95,6 +103,7 @@ const I18N = {
 
 let lang = safeStorage('zag-lang') || 'fa';
 let chartDays = 7;
+let activeFormat = '';
 
 function safeStorage(key) {
     try {
@@ -244,7 +253,8 @@ function render() {
     document.getElementById('detail-updated').textContent = formatDateTime(usage.updatedAt);
 
     renderChart();
-    renderLinks(links.subscriptions);
+    renderFormatPicker();
+    renderLinks();
     renderApps(apps);
 }
 
@@ -271,21 +281,73 @@ function renderChart() {
     }).join('');
 }
 
-function renderLinks(subs) {
-    const list = document.getElementById('links-list');
-    list.innerHTML = (subs || []).map(sub => `
-        <div class="panel">
-            <div class="link-card-head">
-                <strong>${sub.type} · ${sub.core}</strong>
-                <span class="link-clients">${sub.clients.join(' · ')}</span>
-            </div>
-            <div class="link-row">
-                <input type="text" readonly value="${sub.url}" />
-                <button class="btn btn-accent" data-copy-value="${sub.url}" type="button">${t('copy')}</button>
-                <button class="btn btn-ghost" data-qr="${sub.url}" type="button">▦</button>
-            </div>
-        </div>
+function renderFormatPicker() {
+    const formats = DATA.formats || [];
+    const picker = document.getElementById('format-picker');
+
+    if (!formats.length) {
+        picker.innerHTML = '';
+        return;
+    }
+
+    if (!formats.some(format => format.id === activeFormat)) {
+        activeFormat = formats[0].id;
+    }
+
+    picker.innerHTML = formats.map(format => `
+        <button class="segment${format.id === activeFormat ? ' is-active' : ''}"
+                data-format="${format.id}" type="button">${format.label}</button>
     `).join('');
+}
+
+function renderLinks() {
+    const list = document.getElementById('links-list');
+    const templates = DATA.templates || [];
+
+    // With no published setups, the flat list is still better than nothing.
+    if (!templates.length) {
+        const formats = DATA.formats || [];
+        const current = formats.find(format => format.id === activeFormat);
+        const cores = current ? current.cores : [];
+
+        list.innerHTML = `<div class="panel"><p class="muted">${t('noTemplates')}</p></div>`
+            + cores.map(entry => linkRow(entry)).join('');
+        return;
+    }
+
+    list.innerHTML = templates.map(template => {
+        const entries = (template.links || {})[activeFormat] || [];
+        if (!entries.length) return '';
+
+        return `<div class="panel">
+            <div class="tpl-head">
+                <div>
+                    <strong>${escapeHtml(template.name[lang] || template.name.en)}</strong>
+                    <p>${escapeHtml(template.description[lang] || template.description.en)}</p>
+                </div>
+            </div>
+            ${entries.map(entry => linkRow(entry)).join('')}
+        </div>`;
+    }).join('');
+}
+
+/** One core's link, labelled with the apps it suits. */
+function linkRow(entry) {
+    return `<div class="tpl-core">
+        <span class="tpl-core-label">${t('forApp', { app: entry.clients.join(' · ') })}</span>
+        <div class="link-row">
+            <input type="text" readonly value="${escapeHtml(entry.url)}" />
+            <button class="btn btn-accent" data-copy-value="${escapeHtml(entry.url)}" type="button">${t('copy')}</button>
+            <button class="btn btn-ghost" data-qr="${escapeHtml(entry.url)}" type="button">▦</button>
+        </div>
+    </div>`;
+}
+
+/** Names and descriptions come from the operator, so never trust them as markup. */
+function escapeHtml(value) {
+    return String(value).replace(/[&<>"']/g, char => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    })[char]);
 }
 
 function renderApps(apps) {
@@ -375,6 +437,14 @@ document.addEventListener('click', event => {
         document.querySelectorAll('.tab-panel').forEach(node => {
             node.classList.toggle('is-active', node.dataset.tab === tab.dataset.tab);
         });
+        return;
+    }
+
+    const segment = target.closest('.segment');
+    if (segment) {
+        activeFormat = segment.dataset.format;
+        renderFormatPicker();
+        renderLinks();
         return;
     }
 

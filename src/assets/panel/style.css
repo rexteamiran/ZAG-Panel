@@ -1010,3 +1010,89 @@ table tr:not(:last-child) {
         width: 30%;
     }
 }
+/* ==========================================================================
+   Templates
+   ========================================================================== */
+
+.template-intro {
+    margin: 0 0 1rem;
+    color: var(--color-secondary-text, inherit);
+    font-size: 0.9rem;
+    line-height: 1.6;
+}
+
+.template-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+}
+
+.template-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.template-filter {
+    padding: 0.5rem 0.7rem;
+}
+
+.template-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 0.75rem;
+}
+
+.template-card {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 0.9rem;
+    border: 1px solid var(--color-border, #3a3a3a);
+    border-radius: 12px;
+}
+
+.template-card h4 {
+    margin: 0;
+    font-size: 0.95rem;
+}
+
+.template-card p {
+    margin: 0;
+    font-size: 0.82rem;
+    line-height: 1.55;
+    opacity: 0.85;
+}
+
+.template-warning {
+    font-size: 0.78rem;
+    line-height: 1.5;
+    opacity: 0.9;
+}
+
+.template-card-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: auto;
+    padding-top: 0.4rem;
+}
+
+.template-show {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.82rem;
+}
+
+.template-badge {
+    padding: 0.15rem 0.5rem;
+    border: 1px solid var(--color-border, #3a3a3a);
+    border-radius: 999px;
+    font-size: 0.7rem;
+    opacity: 0.8;
+}

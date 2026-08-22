@@ -2,7 +2,9 @@ import { getClNormalConfig, getClWarpConfig } from '@cores/clash/configs';
 import { getURLConfigs } from '@cores/common';
 import { getSbCustomConfig, getSbWarpConfig } from '@cores/sing-box/configs';
 import { getXrCustomConfigs, getXrWarpConfigs } from '@cores/xray/configs';
-import { setSettings, getGlobals, getKvSettings, getSharedSettings, clients, subscriptions } from '@settings';
+import { setSettings, getGlobals, getKvSettings, getBaseSettings, getSharedSettings, clients, subscriptions } from '@settings';
+import { withSettings } from '@settings/overlay';
+import { resolveTemplate, enabledTemplates } from '@templates-store';
 import { fallback } from './utils';
 import { decideRoute } from './formats';
 import { getWireguardConfigs } from '@cores/wireguard';
@@ -65,8 +67,32 @@ async function routeSubscription(request: Request, env: Env): Promise<Response> 
             );
 
         case 'config':
-            return buildConfig(decision.format, decision.client, env);
+            return buildTemplatedConfig(decision.format, decision.client, env);
     }
+}
+
+/**
+ * Serves a subscription under a template, when the link asks for one.
+ *
+ * The overlay is applied for the life of this request only, so two customers
+ * following two different template links get two different configurations from
+ * the same panel, and neither changes what the panel has stored.
+ */
+async function buildTemplatedConfig(format: string, client: string, env: Env): Promise<Response> {
+    const { searchParams } = getGlobals();
+    const templateId = searchParams.get('tpl') ?? '';
+    if (!templateId) return buildConfig(format, client, env);
+
+    const overlay = await resolveTemplate(env, templateId);
+    if (!overlay) {
+        return new Response(`Unknown template "${templateId}".`, {
+            status: HttpStatus.BAD_REQUEST,
+            headers: { 'Content-Type': 'text/plain; charset=utf-8' }
+        });
+    }
+
+    const scoped = { ...getBaseSettings(), ...overlay };
+    return withSettings(scoped, async () => buildConfig(format, client, env));
 }
 
 function buildConfig(format: string, client: string, env: Env): Promise<Response> | Response {
@@ -129,12 +155,42 @@ async function renderPortal(env: Env): Promise<Response> {
     const updated = await checkAlerts(env, limits, usage);
     if (updated) await saveLimits(env, updated);
 
-    const subs = Object.entries(subscriptions).flatMap(([path, category]) =>
-        category.categories.map(entry => ({
-            type: category.label,
+    // The customer picks a connection type first, then a template — so the
+    // portal needs the formats as a list, and each enabled template's links
+    // within each format.
+    const formats = Object.entries(subscriptions).map(([path, category]) => ({
+        id: path,
+        label: category.label,
+        cores: category.categories.map(entry => ({
             core: entry.core,
             clients: entry.clients,
             url: `${base}/${securePath}/sub/${path}?app=${entry.core}`
+        }))
+    }));
+
+    const templates = (await enabledTemplates(env)).map(template => ({
+        id: template.id,
+        name: template.name,
+        description: template.description,
+        // One set of links per format, so switching the connection type at the
+        // top of the page just swaps which set is shown.
+        links: Object.fromEntries(formats.map(format => [
+            format.id,
+            format.cores.map(entry => ({
+                core: entry.core,
+                clients: entry.clients,
+                url: `${entry.url}&tpl=${encodeURIComponent(template.id)}`
+            }))
+        ]))
+    }));
+
+    // Kept for anything still reading the old flat shape.
+    const subs = formats.flatMap(format =>
+        format.cores.map(entry => ({
+            type: format.label,
+            core: entry.core,
+            clients: entry.clients,
+            url: entry.url
         }))
     );
 
@@ -159,6 +215,8 @@ async function renderPortal(env: Env): Promise<Response> {
             updatedAt: usage.updatedAt,
             history: usageHistory(usage, 30)
         },
+        formats,
+        templates,
         links: {
             auto: `${base}/${securePath}/sub/normal?app=xray`,
             raw: `${base}/${securePath}/sub/raw?app=xray`,

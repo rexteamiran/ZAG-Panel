@@ -71,7 +71,11 @@ async function buildWorker() {
         write: false,
         external: [
             'cloudflare:sockets',
-            'node:crypto'
+            'node:crypto',
+            // Provided by the runtime under the nodejs_compat flag, which every
+            // deploy path sets. Used to scope settings to a request so template
+            // links cannot read each other's configuration.
+            'node:async_hooks'
         ],
         platform: 'browser',
         target: 'esnext',
@@ -93,6 +97,8 @@ async function buildWorker() {
     });
 
     console.log(`${success} Worker minified successfuly!`);
+
+    await emitTemplates();
 
     const base64Gzip = gzipSync(script, { level: 9 }).toString("base64");
 
@@ -119,3 +125,40 @@ buildWorker().catch(err => {
     process.exit(1);
 });
 
+/**
+ * Writes dist/templates.json, uploaded as a release asset.
+ *
+ * The wizard vendors a copy of this so its own build never has to reach the
+ * network — which matters, because the machine that builds it often cannot.
+ */
+async function emitTemplates() {
+    const bundled = await build({
+        entryPoints: [join(__dirname, '../src/settings/templates.ts')],
+        bundle: true,
+        write: false,
+        format: 'esm',
+        platform: 'neutral',
+        define: { _VL_: '"vless"', _TR_: '"trojan"' }
+    });
+
+    const source = bundled.outputFiles[0].text;
+    const module = await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
+
+    // Only what the wizard shows and applies; the panel keeps the rest.
+    const templates = module.settingsTemplates.map(template => ({
+        id: template.id,
+        family: template.family,
+        name: template.name,
+        description: template.description,
+        warning: template.warning ?? null,
+        requiresOrigin: template.requiresOrigin ?? null,
+        settings: template.settings
+    }));
+
+    writeFileSync(join(DIST_PATH, 'templates.json'), JSON.stringify({
+        version: pkg.version,
+        templates
+    }, null, 2));
+
+    console.log(`${success} ${templates.length} templates exported!`);
+}

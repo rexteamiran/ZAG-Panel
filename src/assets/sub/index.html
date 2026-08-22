@@ -165,8 +165,19 @@
             <section class="view" data-view="links">
                 <div class="section-head">
                     <h2 data-i18n="navLinks">Links</h2>
-                    <p data-i18n="linksHint">Pick the subscription that matches your client.</p>
+                    <p data-i18n="linksHint">Choose a connection type, then the setup that suits you.</p>
                 </div>
+
+                <div class="panel">
+                    <div class="panel-head">
+                        <div>
+                            <h3><span class="panel-icon">&#9881;</span><span data-i18n="connectionType">Connection type</span></h3>
+                            <p data-i18n="connectionTypeHint">Not sure? Leave it on the first one.</p>
+                        </div>
+                    </div>
+                    <div class="segmented" id="format-picker"></div>
+                </div>
+
                 <div id="links-list" class="stack"></div>
             </section>
 

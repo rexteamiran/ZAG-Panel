@@ -2,6 +2,29 @@
 
 ## 1.2.0 — security and correctness
 
+### New: templates
+
+Twenty-four ready-made setups, so a panel can be configured without reading a
+single field. The admin panel keeps all of them — a template just fills them
+in, and you still press Apply.
+
+Templates cover real situations: mobile data, home ADSL, heavy filtering, total
+blackout, gaming, streaming, weak devices, each major client, WARP, family
+filtering, AI and sanctioned sites, developer tooling, and Iran-direct routing.
+
+**Every enabled template also gets its own subscription link.** The subscriber
+page now asks for a connection type first — Normal, Fragment, Raw, Warp,
+Warp Pro — and then lists the setups you published, each with its own links.
+Customers choose what works on their network instead of asking you.
+
+You can save your current settings as a template, choose which templates
+customers see, and back the whole set up to a JSON file or import one.
+
+Template links change only what a subscription renders; nothing about the
+panel's stored settings changes. Settings are now scoped to each request, so
+two customers on two different template links can never read each other's
+configuration.
+
 ### Fixed: a subscription link could hand out your own settings
 
 The subscription router fell through between formats. A request to

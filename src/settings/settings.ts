@@ -1,6 +1,8 @@
 import { getDataset } from '@kv';
+import { scopedSettings } from './overlay';
 import {
     KvSettings,
+    RuntimeSettings,
     ReqSettings,
     EmbededSettings,
     MainSettings,
@@ -101,7 +103,21 @@ export function getSharedSettings(): SharedSettings {
     };
 }
 
-export const getSettings = () => ({
+/**
+ * The settings this request should use.
+ *
+ * Prefers the request-scoped snapshot, which carries any template overlay, and
+ * falls back to the panel's stored settings outside a scoped request. Every
+ * builder in src/cores reads through here, so a template applies everywhere
+ * without any of them changing.
+ */
+export const getSettings = (): RuntimeSettings => scopedSettings() ?? ({
+    ...kvSettings,
+    ...globalSettings
+});
+
+/** The panel's own stored settings, ignoring any template overlay. */
+export const getBaseSettings = (): RuntimeSettings => ({
     ...kvSettings,
     ...globalSettings
 });
