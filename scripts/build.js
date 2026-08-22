@@ -144,6 +144,10 @@ async function emitTemplates() {
     const source = bundled.outputFiles[0].text;
     const module = await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
 
+    // This runs before the worker is written, so on a clean checkout — which
+    // is every CI run — dist/ does not exist yet.
+    mkdirSync(DIST_PATH, { recursive: true });
+
     // Only what the wizard shows and applies; the panel keeps the rest.
     const templates = module.settingsTemplates.map(template => ({
         id: template.id,

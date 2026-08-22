@@ -1,5 +1,11 @@
 # ZAGROOO Panel
 
+## 1.2.1
+
+- Fixed the release build failing on a clean checkout: the template export ran
+  before the output directory was created, so it worked locally and failed in
+  CI every time.
+
 ## 1.2.0 — security and correctness
 
 ### New: templates
