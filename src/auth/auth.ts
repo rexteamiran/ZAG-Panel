@@ -16,7 +16,11 @@ export async function generateJWTToken(request: Request, env: Env): Promise<Resp
         return respond(false, HttpStatus.METHOD_NOT_ALLOWED, 'Method not allowed.');
     }
 
-    const data = await request.json() as any;
+    const data = await request.json().catch(() => null) as any;
+    if (!data || typeof data.username !== 'string' || typeof data.password !== 'string') {
+        return respond(false, HttpStatus.BAD_REQUEST, 'Malformed request.');
+    }
+
     const savedPass = await storeGet<string>(env, 'pwd');
     const { accEmail } = getGlobals();
     const username = data.username?.toLowerCase();
@@ -87,7 +91,10 @@ export async function resetPassword(request: Request, env: Env): Promise<Respons
         return respond(false, HttpStatus.UNAUTHORIZED, 'Unauthorized.');
     }
 
-    const data = await request.json() as any;
+    const data = await request.json().catch(() => null) as any;
+    if (!data || typeof data.password !== 'string') {
+        return respond(false, HttpStatus.BAD_REQUEST, 'Malformed request.');
+    }
     const { accEmail } = getGlobals();
 
     if (!auth && !data.username) {
@@ -100,6 +107,16 @@ export async function resetPassword(request: Request, env: Env): Promise<Respons
 
     if (data.password === oldPwd) {
         return respond(false, HttpStatus.BAD_REQUEST, 'Please enter a new Password.');
+    }
+
+    // The login form enforces this too; a direct API call must not be able to
+    // write a weaker password than the UI would accept.
+    if (!/^(?=.*[A-Z])(?=.*\d).{8,}$/.test(data.password)) {
+        return respond(
+            false,
+            HttpStatus.BAD_REQUEST,
+            'Password must contain a capital letter, a number, and be at least 8 characters long.'
+        );
     }
 
     await storePut(env, 'pwd', data.password);

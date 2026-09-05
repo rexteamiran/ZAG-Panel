@@ -275,7 +275,7 @@ function renderChart() {
     container.innerHTML = series.map(entry => {
         const height = Math.max(2, (entry.b / peak) * 100);
         const cls = entry.b ? 'chart-bar' : 'chart-bar is-empty';
-        return `<div class="chart-col" title="${entry.d} — ${formatBytes(entry.b)}">
+        return `<div class="chart-col" title="${escapeHtml(entry.d)} — ${escapeHtml(formatBytes(entry.b))}">
             <span class="${cls}" style="height:${height}%"></span>
         </div>`;
     }).join('');
@@ -354,9 +354,9 @@ function renderApps(apps) {
     const grid = document.getElementById('apps-list');
     grid.innerHTML = (apps || []).map(app => `
         <div class="app-card">
-            <strong>${app.name}</strong>
-            <span>${t('minVersion', { v: app.minVer })}</span>
-            <a href="${app.url}" target="_blank" rel="noopener noreferrer">${app.source} ↗</a>
+            <strong>${escapeHtml(app.name)}</strong>
+            <span>${t('minVersion', { v: escapeHtml(app.minVer) })}</span>
+            <a href="${escapeHtml(app.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(app.source)} ↗</a>
         </div>
     `).join('');
 }

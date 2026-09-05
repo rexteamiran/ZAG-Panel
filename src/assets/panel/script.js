@@ -1366,7 +1366,7 @@ function renderApiKeys(keys) {
     list.innerHTML = keys.map(key => {
         const used = key.lastUsed ? `used ${new Date(key.lastUsed).toLocaleDateString()}` : 'never used';
         return `<div class="dashboard-action">
-            <span>${key.name} · ${used}</span>
+            <span>${escapeTemplateHtml(key.name)} · ${used}</span>
             <button type="button" class="button delete" onclick="revokeApiKey('${key.id}')">
                 <span class="material-symbols-rounded">delete</span>
                 Revoke

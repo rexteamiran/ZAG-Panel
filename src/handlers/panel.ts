@@ -185,10 +185,11 @@ async function updatePanelSettings(request: Request, env: Env): Promise<Response
         const errors = validateSettings(newSettings);
         if (errors) return respond(false, HttpStatus.BAD_REQUEST, 'Validation Error', errors);
 
-        await Promise.all([
-            updateDataset(env, newSettings),
-            updateMainSettings(newSettings)
-        ]);
+        // Sequential on purpose: updateMainSettings builds the new script from
+        // the settings this request just changed, so the dataset write must be
+        // committed first — in parallel it would bake the previous values in.
+        await updateDataset(env, newSettings);
+        await updateMainSettings(newSettings);
 
         const { securePath } = getGlobals();
         if (newSettings.securePath !== securePath) {
@@ -233,7 +234,13 @@ async function resetPanelSettings(request: Request, env: Env): Promise<Response>
 }
 
 async function getMyIP(request: Request): Promise<Response> {
-    const ip = await request.text();
+    const ip = (await request.text()).trim().slice(0, 45);
+
+    // Only an IP literal is ever forwarded; anything else a request body
+    // carried would otherwise be interpolated straight into the ip-api URL.
+    if (!/^(?:\d{1,3}\.){3}\d{1,3}$/.test(ip)) {
+        return respond(false, HttpStatus.BAD_REQUEST, 'Expected an IPv4 address.');
+    }
 
     try {
         const response = await fetch(`http://ip-api.com/json/${ip}?nocache=${Date.now()}`);

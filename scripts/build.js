@@ -21,6 +21,14 @@ const reset = '\x1b[0m';
 const success = `${green}✔${reset}`;
 const failure = `${red}✗${reset}`;
 
+/**
+ * The replacement is a function, never a string: a `$&` or `$'` inside the
+ * inlined CSS or JS would otherwise be read as a substitution pattern and
+ * splice the placeholder text into the page (a `$&` in the panel's password
+ * charset shipped exactly that bug).
+ */
+const inline = (html, marker, content) => html.replace(marker, () => content);
+
 async function processHtmlPages() {
     const indexFiles = globSync('**/index.html', { cwd: ASSET_PATH });
     const theme = readFileSync(join(ASSET_PATH, 'theme.css'), 'utf8');
@@ -33,7 +41,7 @@ async function processHtmlPages() {
         const indexHtml = readFileSync(base('index.html'), 'utf8');
         let html = indexHtml
             .replaceAll('__VERSION__', pkg.version)
-            .replace('/* THEME_PLACEHOLDER */', theme);
+            .replace('/* THEME_PLACEHOLDER */', () => theme);
 
         if (dir !== 'error') {
             const css = readFileSync(base('style.css'), 'utf8');
@@ -41,9 +49,8 @@ async function processHtmlPages() {
             const script = readFileSync(base('script.js'), 'utf8');
             const { code } = await jsMinify(script);
 
-            html = html
-                .replace('/* CSS_PLACEHOLDER */', css)
-                .replace('/* JS_PLACEHOLDER */', code);
+            html = inline(html, '/* CSS_PLACEHOLDER */', css);
+            html = inline(html, '/* JS_PLACEHOLDER */', code);
         }
 
         const minifiedHtml = htmlMinify(html, {

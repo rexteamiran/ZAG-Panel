@@ -47,8 +47,9 @@ function rateLimited(ip: string): boolean {
     const now = Date.now();
 
     // Entries were only ever overwritten, never removed, so the map grew for
-    // the isolate's lifetime. Sweep expired windows occasionally.
-    if (attempts.size > 1000) {
+    // the isolate's lifetime. Sweep expired windows regularly, not only when
+    // the map is huge (a post-sweep size above 1000 would sweep per request).
+    if (attempts.size >= 512 || attempts.size > 1000) {
         for (const [key, value] of attempts) {
             if (now - value.windowStart > RATE_LIMIT_WINDOW_MS) attempts.delete(key);
         }

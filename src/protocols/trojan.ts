@@ -172,12 +172,18 @@ function parseTrHeader(buffer: ArrayBuffer) {
 
     const portIndex = addressIndex + addressLength;
     const portBuffer = socks5DataBuffer.slice(portIndex, portIndex + 2);
+    if (socks5DataBuffer.byteLength < portIndex + 2) {
+        return {
+            hasError: true,
+            message: 'invalid port data',
+        };
+    }
     const portRemote = new DataView(portBuffer).getUint16(0);
 
     return {
         hasError: false,
         addressRemote: address,
         portRemote,
-        rawClientData: socks5DataBuffer.slice(portIndex + 4),
+        rawClientData: socks5DataBuffer.slice(portIndex + 2),
     };
 }

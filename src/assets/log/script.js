@@ -64,7 +64,10 @@ function render() {
 
 async function load() {
     try {
-        const res = await fetch('api/log', { credentials: 'same-origin' });
+        // The page is served at /{securePath}/log, so this resolves to
+        // /{securePath}/log/api — a bare 'api/log' would land on the
+        // /{securePath}/api/* machine routes instead.
+        const res = await fetch('log/api', { credentials: 'same-origin' });
         const data = await res.json();
 
         if (!data.success) throw new Error(data.message || `HTTP ${res.status}`);
@@ -86,7 +89,7 @@ clearButton.addEventListener('click', async () => {
     if (!confirm('Clear the whole event log? This cannot be undone.')) return;
 
     try {
-        const res = await fetch('api/log', {
+        const res = await fetch('log/api', {
             method: 'DELETE',
             credentials: 'same-origin'
         });

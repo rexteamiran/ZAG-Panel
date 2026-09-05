@@ -245,8 +245,12 @@ function convertToNAT64IPv6(ipv4Address: string, prefix: string) {
 
     const match = prefix.match(/^\[([0-9A-Fa-f:]+)\]$/);
 
-    if (match) {
-        return `[${match[1]}${hex[0]}${hex[1]}:${hex[2]}${hex[3]}]`;
+    if (!match) {
+        // A malformed prefix used to fall through and return undefined,
+        // which only blew up later inside connect().
+        throw new Error(`Invalid NAT64 prefix: ${prefix}`);
     }
+
+    return `[${match[1]}${hex[0]}${hex[1]}:${hex[2]}${hex[3]}]`;
 }
 

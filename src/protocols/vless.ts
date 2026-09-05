@@ -114,6 +114,12 @@ function parseVlHeader(VLBuffer: ArrayBuffer, userID: string) {
         };
     }
 
+    // A short header can still pass the length check above when it carries a
+    // long domain; read the variable fields defensively so a truncated chunk
+    // is rejected as invalid data instead of yielding undefined bytes.
+    const byteAt = (offset: number): number | undefined =>
+        offset >= VLBuffer.byteLength ? undefined : new Uint8Array(VLBuffer.slice(offset, offset + 1))[0];
+
     const version = new Uint8Array(VLBuffer.slice(0, 1));
     const slicedBuffer = new Uint8Array(VLBuffer.slice(1, 17));
     const slicedBufferString = stringify(slicedBuffer);
@@ -126,8 +132,22 @@ function parseVlHeader(VLBuffer: ArrayBuffer, userID: string) {
         };
     }
 
-    const optLength = new Uint8Array(VLBuffer.slice(17, 18))[0];
-    const command = new Uint8Array(VLBuffer.slice(18 + optLength, 18 + optLength + 1))[0];
+    const optLength = byteAt(17);
+    if (optLength === undefined) {
+        return {
+            hasError: true,
+            message: 'invalid data',
+        };
+    }
+
+    const command = byteAt(18 + optLength);
+    if (command === undefined) {
+        return {
+            hasError: true,
+            message: 'invalid data',
+        };
+    }
+
     let isUDP = false;
 
     if (command === 1) {
@@ -141,12 +161,23 @@ function parseVlHeader(VLBuffer: ArrayBuffer, userID: string) {
     }
 
     const portIndex = 18 + optLength + 1;
+    if (VLBuffer.byteLength < portIndex + 2) {
+        return {
+            hasError: true,
+            message: 'invalid data',
+        };
+    }
     const portBuffer = VLBuffer.slice(portIndex, portIndex + 2);
     const portRemote = new DataView(portBuffer).getUint16(0);
 
     let addressIndex = portIndex + 2;
-    const addressBuffer = new Uint8Array(VLBuffer.slice(addressIndex, addressIndex + 1));
-    const addressType = addressBuffer[0];
+    const addressType = byteAt(addressIndex);
+    if (addressType === undefined) {
+        return {
+            hasError: true,
+            message: 'invalid data',
+        };
+    }
     let addressLength = 0;
     let addressValueIndex = addressIndex + 1;
     let addressValue = '';
@@ -154,17 +185,26 @@ function parseVlHeader(VLBuffer: ArrayBuffer, userID: string) {
     switch (addressType) {
         case 1:
             addressLength = 4;
+            if (VLBuffer.byteLength < addressValueIndex + addressLength) {
+                return { hasError: true, message: 'invalid data' };
+            }
             addressValue = new Uint8Array(VLBuffer.slice(addressValueIndex, addressValueIndex + addressLength)).join('.');
             break;
 
         case 2:
-            addressLength = new Uint8Array(VLBuffer.slice(addressValueIndex, addressValueIndex + 1))[0];
+            addressLength = byteAt(addressValueIndex) ?? 0;
             addressValueIndex += 1;
+            if (!addressLength || VLBuffer.byteLength < addressValueIndex + addressLength) {
+                return { hasError: true, message: 'invalid data' };
+            }
             addressValue = new TextDecoder().decode(VLBuffer.slice(addressValueIndex, addressValueIndex + addressLength));
             break;
 
         case 3: {
             addressLength = 16;
+            if (VLBuffer.byteLength < addressValueIndex + addressLength) {
+                return { hasError: true, message: 'invalid data' };
+            }
             const dataView = new DataView(VLBuffer.slice(addressValueIndex, addressValueIndex + addressLength));
             const ipv6 = [];
 
@@ -249,7 +289,9 @@ async function handleUDPOutBound(webSocket: WebSocket, VLResponseHeader: Uint8Ar
         transform(chunk, controller) {
             for (let index = 0; index < chunk.byteLength;) {
                 const lengthBuffer = chunk.slice(index, index + 2);
+                if (chunk.byteLength < index + 2) break;
                 const udpPakcetLength = new DataView(lengthBuffer).getUint16(0);
+                if (chunk.byteLength < index + 2 + udpPakcetLength) break;
                 const udpData = new Uint8Array(chunk.slice(index + 2, index + 2 + udpPakcetLength));
                 index = index + 2 + udpPakcetLength;
                 controller.enqueue(udpData);
