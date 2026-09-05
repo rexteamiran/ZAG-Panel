@@ -24,6 +24,7 @@
             "@kv": ["./src/settings/dataset"],
             "@usage": ["./src/settings/usage"],
             "@settings/store": ["./src/settings/store"],
+            "@settings/errorlog": ["./src/settings/errorlog"],
             "@templates": ["./src/settings/templates"],
             "@settings/overlay": ["./src/settings/overlay"],
             "@templates-store": ["./src/settings/templates-store"],

@@ -8,6 +8,7 @@ import { decompressGzipBase64, respond, HttpStatus, safeError } from '@common';
 import { getDataset, updateDataset } from '@kv';
 import { buildScript, updateMainSettings } from '@main';
 import { getGlobals, getMainSettings, subscriptions, clients } from '@settings';
+import { recordError } from '@settings/errorlog';
 import { storeGet } from '@settings/store';
 import { validateSettings } from '@validators';
 import { fallback } from './utils';
@@ -96,6 +97,7 @@ async function updatePanel(request: Request, env: Env): Promise<Response> {
 
         return respond(true, HttpStatus.OK);
     } catch (error) {
+        await recordError(env, 'panel', safeError(error), 'Self-update failed.');
         return respond(
             false,
             HttpStatus.INTERNAL_SERVER_ERROR,
@@ -124,6 +126,7 @@ async function deletePanel(request: Request, env: Env): Promise<Response> {
 
         return respond(true, HttpStatus.OK);
     } catch (error) {
+        await recordError(env, 'panel', safeError(error), 'Panel deletion failed.');
         return respond(
             false,
             HttpStatus.INTERNAL_SERVER_ERROR,
@@ -158,7 +161,7 @@ async function getPanelSettings(request: Request, env: Env): Promise<Response> {
             'Expires': '0'
         });
     } catch (error) {
-        console.log(error);
+        await recordError(env, 'panel', safeError(error), 'Reading settings failed.');
         return respond(
             false,
             HttpStatus.INTERNAL_SERVER_ERROR,
@@ -197,7 +200,7 @@ async function updatePanelSettings(request: Request, env: Env): Promise<Response
 
         return respond(true, HttpStatus.OK, '');
     } catch (error) {
-        console.log(error);
+        await recordError(env, 'panel', safeError(error), 'Saving settings failed.');
         return respond(false, HttpStatus.INTERNAL_SERVER_ERROR, safeError(error));
     }
 }
@@ -220,7 +223,7 @@ async function resetPanelSettings(request: Request, env: Env): Promise<Response>
 
         return respond(true, HttpStatus.OK, '', { ...kvSettings, ...mainSettings });
     } catch (error) {
-        console.log(error);
+        await recordError(env, 'panel', safeError(error), 'Resetting settings failed.');
         return respond(
             false,
             HttpStatus.INTERNAL_SERVER_ERROR,

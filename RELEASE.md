@@ -1,5 +1,13 @@
 # ZAGROOO Panel
 
+## 1.3.1 — the event log
+
+New: `/{securePath}/log`. Everything the panel catches — a request that died,
+a failed usage flush, Telegram delivery problems, failed login attempts — is
+recorded in the panel's own store and shown on one page: what broke, from
+which subsystem, when, and the detail underneath. Filter by level or text,
+clear it in one click. Reading it needs an admin session, like the panel.
+
 ## 1.3.0 — D1-only storage and a machine API for the dashboard
 
 ### Breaking: KV is gone, D1 is the only store

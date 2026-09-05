@@ -5,6 +5,7 @@ import { authenticate } from '@auth';
 import { PanelLimits, TelegramBot, UsageSnapshot } from '#types/settings';
 import { formatBytes } from '@limits';
 import { storeGet, storePut } from '@settings/store';
+import { recordError } from '@settings/errorlog';
 
 export async function setupTelegramWebhook(request: Request, env: Env): Promise<Response> {
     if (request.method !== 'PUT') {
@@ -542,7 +543,10 @@ async function pushAlert(env: Env, text: string): Promise<void> {
             text,
             parse_mode: 'HTML'
         })
-    }).catch(error => console.log('Telegram alert failed:', safeError(error)));
+    }).catch(error => {
+        void recordError(env, 'telegram', safeError(error), 'Telegram alert delivery failed.', 'warn');
+        console.log('Telegram alert failed:', safeError(error));
+    });
 }
 
 export async function notifyAutoPause(env: Env, reason: string): Promise<void> {

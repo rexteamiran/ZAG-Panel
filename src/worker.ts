@@ -1,6 +1,7 @@
 import { handleDoH } from '@handlers/doh';
 import { renderError, renderReinstall } from '@handlers/error';
 import { handleLogin } from '@handlers/login';
+import { handleLog } from '@handlers/log';
 import { handlePanel } from '@handlers/panel';
 import { handleProxyIPs } from '@handlers/proxy-ip';
 import { generateQRCode } from '@handlers/qrcode';
@@ -11,6 +12,8 @@ import { fallback } from '@handlers/utils';
 import { handleWebsocket } from '@handlers/websocket';
 import { init, getGlobals } from '@settings';
 import { bindContext } from '@usage';
+import { recordError } from '@settings/errorlog';
+import { safeError } from '@common';
 
 export default {
 	async fetch(request: Request, env: Env, ctx: ExecutionContext) {
@@ -29,6 +32,9 @@ export default {
 
 				case `/${securePath}/login`:
 					return handleLogin(request, env);
+
+				case `/${securePath}/log`:
+					return handleLog(request, env);
 
 				case `/${securePath}/sub`:
 					return handleSubscriptions(request, env);
@@ -52,6 +58,12 @@ export default {
 					return fallback(request);
 			}
 		} catch (error) {
+			// Record before rendering, so the /log page shows exactly what this
+			// request died of — including the URL that triggered it.
+			const task = recordError(env, 'worker', safeError(error), `URL: ${request.url}`)
+				.catch(() => null);
+			ctx.waitUntil(task);
+
 			return renderError(error);
 		}
 	}

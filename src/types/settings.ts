@@ -304,3 +304,14 @@ export interface AccessVerdict {
 }
 
 export type PanelStatus = 'active' | 'paused' | 'expired' | 'limited' | 'daily-limited';
+
+export interface PanelErrorEvent {
+    id: string;
+    /** Epoch ms. */
+    ts: number;
+    level: 'error' | 'warn';
+    /** Which subsystem produced it: worker, websocket, api, usage, telegram… */
+    source: string;
+    message: string;
+    detail: string;
+}

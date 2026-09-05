@@ -2,6 +2,7 @@ import { HttpStatus, respond } from '@common';
 import { SignJWT, jwtVerify } from 'jose';
 import { getGlobals } from '@settings';
 import { storeGet, storePut } from '@settings/store';
+import { recordError } from '@settings/errorlog';
 
 export function logout(): Response {
     return respond(true, HttpStatus.OK, 'Successfully logged out!', null, {
@@ -20,6 +21,9 @@ export async function generateJWTToken(request: Request, env: Env): Promise<Resp
     const { accEmail } = getGlobals();
     const username = data.username?.toLowerCase();
     if (username !== accEmail || data.password !== savedPass) {
+        // Record, don't just reject: repeated failures here are the one
+        // signal an operator gets that someone is knocking on the door.
+        await recordError(env, 'auth', 'Failed login attempt', `Username: ${username ?? '(none)'}`, 'warn');
         return respond(false, HttpStatus.UNAUTHORIZED, 'Wrong Credentials.');
     }
 

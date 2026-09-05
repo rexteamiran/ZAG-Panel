@@ -3,6 +3,7 @@ import { authenticate } from '@auth';
 import { HttpStatus, respond, safeError } from '@common';
 import { activeDevices, evaluateAccess, panelStatus } from '@limits';
 import { getGlobals, getKvSettings, getSettings, setSettings, subscriptions } from '@settings';
+import { recordError } from '@settings/errorlog';
 import { updateDataset } from '@kv';
 import { validateSettings } from '@validators';
 import { KvSettings, PanelSettings } from '#types/settings';
@@ -182,10 +183,11 @@ async function routePanelApi(request: Request, env: Env): Promise<Response> {
                     ? respond(true, HttpStatus.OK, '', { settings: shareableSettings() })
                     : applySettings(request, env);
 
-            default:
-                return fallback(request);
+        default:
+            return fallback(request);
         }
     } catch (error) {
+        await recordError(env, 'api', safeError(error), `Route: ${getGlobals().pathname}`);
         return respond(false, HttpStatus.INTERNAL_SERVER_ERROR, `API error: ${safeError(error)}`);
     }
 }

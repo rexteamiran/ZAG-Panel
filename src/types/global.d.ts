@@ -19,6 +19,7 @@ declare global {
     const ERROR_HTML_CONTENT: string;
     const PANEL_HTML_CONTENT: string;
     const LOGIN_HTML_CONTENT: string;
+    const LOG_HTML_CONTENT: string;
     const PROXY_IP_HTML_CONTENT: string;
     const SUB_HTML_CONTENT: string;
     const ICON_CONTENT: string;

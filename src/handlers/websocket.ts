@@ -2,6 +2,7 @@ import { HttpStatus } from '@common';
 import { TrOverWSHandler } from '@protocols/trojan';
 import { VlOverWSHandler } from '@protocols/vless';
 import { getGlobals } from '@settings';
+import { recordError } from '@settings/errorlog';
 import { deviceLimitExceeded, evaluateAccess, pauseCauseFor, setActiveLimits, touchDevice } from '@limits';
 import { bindContext, getLimits, getUsageSnapshot, maybeRollMonth, saveLimits, withPending } from '@usage';
 import { notifyAutoPause } from '@api/telegram';
@@ -83,6 +84,10 @@ export async function handleWebsocket(request: Request, env: Env, ctx?: Executio
         }
     } catch (error) {
         console.log('Websocket handler error:', error);
+        const task = recordError(env, 'websocket', String(error instanceof Error ? error.message : error))
+            .catch(() => null);
+        ctx ? ctx.waitUntil(task) : void task;
+
         return new Response('Bad Request', { status: HttpStatus.BAD_REQUEST });
     }
 }

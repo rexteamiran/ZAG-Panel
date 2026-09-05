@@ -106,6 +106,7 @@ async function buildWorker() {
         SOURCE_CONTENT: base64Gzip,
         PANEL_HTML_CONTENT: htmls['panel'],
         LOGIN_HTML_CONTENT: htmls['login'],
+        LOG_HTML_CONTENT: htmls['log'],
         ERROR_HTML_CONTENT: htmls['error'],
         PROXY_IP_HTML_CONTENT: htmls['proxy-ip'],
         SUB_HTML_CONTENT: htmls['sub'],

@@ -1,5 +1,6 @@
 import { DayUsage, PanelLimits, UsageSnapshot } from '#types/settings';
 import { safeError } from '@common';
+import { recordError } from './errorlog';
 import { storeGet, storePut } from './store';
 
 /* ==========================================================================
@@ -389,6 +390,9 @@ export function scheduleFlush(force = false): void {
     if (!force && pendingUp + pendingDown === 0) return;
 
     const task = flushUsage(boundEnv, undefined, force).catch(error => {
+        // Visibility beats silence: a flush that keeps failing means the
+        // usage totals on the portal and the dashboard quietly go stale.
+        void recordError(boundEnv!, 'usage', safeError(error), 'Usage flush failed — reported totals may be stale.', 'warn');
         console.log('Usage flush failed:', safeError(error));
         return null;
     });
