@@ -1,6 +1,7 @@
 import { HttpStatus, respond } from '@common';
 import { SignJWT, jwtVerify } from 'jose';
 import { getGlobals } from '@settings';
+import { storeGet, storePut } from '@settings/store';
 
 export function logout(): Response {
     return respond(true, HttpStatus.OK, 'Successfully logged out!', null, {
@@ -15,17 +16,17 @@ export async function generateJWTToken(request: Request, env: Env): Promise<Resp
     }
 
     const data = await request.json() as any;
-    const savedPass = await env.kv.get('pwd');
+    const savedPass = await storeGet<string>(env, 'pwd');
     const { accEmail } = getGlobals();
     const username = data.username?.toLowerCase();
     if (username !== accEmail || data.password !== savedPass) {
         return respond(false, HttpStatus.UNAUTHORIZED, 'Wrong Credentials.');
     }
 
-    let secretKey = await env.kv.get('secretKey');
+    let secretKey = await storeGet<string>(env, 'secretKey');
     if (!secretKey) {
         secretKey = generateSecretKey();
-        await env.kv.put('secretKey', secretKey);
+        await storePut(env, 'secretKey', secretKey);
     }
 
     const secret = new TextEncoder().encode(secretKey);
@@ -51,9 +52,9 @@ function generateSecretKey(): string {
 
 export async function authenticate(request: Request, env: Env): Promise<boolean> {
     try {
-        const secretKey = await env.kv.get('secretKey');
+        const secretKey = await storeGet<string>(env, 'secretKey');
         if (secretKey === null) {
-            console.log('Secret key not found in KV.');
+            console.log('Secret key not found in the panel store.');
             return false;
         }
 
@@ -77,7 +78,7 @@ export async function authenticate(request: Request, env: Env): Promise<boolean>
 
 export async function resetPassword(request: Request, env: Env): Promise<Response> {
     const auth = await authenticate(request, env);
-    const oldPwd = await env.kv.get('pwd');
+    const oldPwd = await storeGet<string>(env, 'pwd');
     if (oldPwd && !auth) {
         return respond(false, HttpStatus.UNAUTHORIZED, 'Unauthorized.');
     }
@@ -97,7 +98,7 @@ export async function resetPassword(request: Request, env: Env): Promise<Respons
         return respond(false, HttpStatus.BAD_REQUEST, 'Please enter a new Password.');
     }
 
-    await env.kv.put('pwd', data.password);
+    await storePut(env, 'pwd', data.password);
 
     return respond(true, HttpStatus.OK, 'Successfully logged in!', null, {
         'Set-Cookie': 'jwtToken=; Path=/; Secure; SameSite=Strict; Expires=Thu, 01 Jan 1970 00:00:00 GMT',

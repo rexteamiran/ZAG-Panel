@@ -6,7 +6,7 @@ import { createCNAME, listZones } from '@api/dns';
 import { decompressGzipBase64, safeError } from '@common';
 
 export async function updateMainSettings(newSettings: PanelSettings | null): Promise<Partial<EmbededSettings>> {
-    const { accID, accEmail, apiToken, mainDomain, vlUUID, trPass, securePath } = getGlobals();
+    const { accID, accEmail, apiToken, mainDomain, vlUUID, trPass, securePath, panelId, d1Id } = getGlobals();
     const settings: EmbededSettings = {
         accID,
         accEmail,
@@ -18,6 +18,8 @@ export async function updateMainSettings(newSettings: PanelSettings | null): Pro
         proxyIPs: newSettings ? newSettings.proxyIPs : [],
         prefixes: newSettings ? newSettings.prefixes : [],
         mainDomain,
+        panelId,
+        d1Id,
         fallback: newSettings ? newSettings.fallback : '',
         dohUrl: newSettings ? newSettings.dohUrl : ''
     };
@@ -101,7 +103,7 @@ export async function buildScript(upgradePanel: boolean, settings?: MainSettings
         script = await decompressGzipBase64(SOURCE_CONTENT);
     }
 
-    const { accID, accEmail, apiToken, mainDomain } = getGlobals();
+    const { accID, accEmail, apiToken, mainDomain, panelId, d1Id } = getGlobals();
     const embededSettings = {
         accID,
         accEmail,
@@ -114,7 +116,9 @@ export async function buildScript(upgradePanel: boolean, settings?: MainSettings
         prefixes: settings.prefixes,
         fallback: settings.fallback,
         dohUrl: settings.dohUrl,
-        mainDomain
+        mainDomain,
+        panelId,
+        d1Id
     };
 
     const embededContents = {

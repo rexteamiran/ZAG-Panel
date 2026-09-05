@@ -50,6 +50,8 @@ export function init(request: Request, env: Env) {
             '[2602:fc59:11:64::]'
         ],
         mainDomain: EMBEDED_SETTINGS.mainDomain,
+        panelId: EMBEDED_SETTINGS.panelId || EMBEDED_SETTINGS.mainDomain.split('.')[0],
+        d1Id: EMBEDED_SETTINGS.d1Id || '',
         fallback: EMBEDED_SETTINGS.fallback,
         dohUrl: EMBEDED_SETTINGS.dohUrl || 'https://cloudflare-dns.com/dns-query',
         deployType: env.CF_PAGES === '1' ? 'pages' : 'workers',
@@ -73,7 +75,7 @@ export const getGlobals = (): EmbededSettings & ReqSettings => globalSettings;
 export const getWarpAccounts = (): WarpAccount[] => warpAccounts;
 export const getKvSettings = (): KvSettings => kvSettings;
 export function getMainSettings(): MainSettings {
-    const { accID, accEmail, apiToken, mainDomain, ...mainSettings } = EMBEDED_SETTINGS;
+    const { accID, accEmail, apiToken, mainDomain, panelId, d1Id, ...mainSettings } = EMBEDED_SETTINGS;
     return mainSettings;
 }
 

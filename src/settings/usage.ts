@@ -1,72 +1,19 @@
 import { DayUsage, PanelLimits, UsageSnapshot } from '#types/settings';
 import { safeError } from '@common';
+import { storeGet, storePut } from './store';
 
 /* ==========================================================================
-   Storage
-   Usage counters are written far more often than anything else in the panel,
-   so they prefer D1 (100k writes/day on the free plan) and fall back to KV
-   (1k writes/day) on panels the wizard deployed without a D1 binding.
+   Usage accounting
+
+   Counters live in the panel's D1 store (`zag_store`, namespaced per panel).
+   Bytes are buffered per isolate and flushed on a cadence rather than per
+   chunk, which keeps write volume far below the free plan's limits.
    ========================================================================== */
 
-const TABLE = 'zag_store';
 const USAGE_KEY = 'usage';
 const LIMITS_KEY = 'limits';
 
 const HISTORY_DAYS = 30;
-
-/** Flush cadence. Whichever comes first. */
-const FLUSH_INTERVAL_MS = 30_000;
-const FLUSH_BYTES = 20 * 1024 * 1024;
-
-let d1Ready = false;
-
-export function hasD1(env: Env): boolean {
-    return Boolean(env.zag_db);
-}
-
-async function ensureTable(env: Env): Promise<void> {
-    if (d1Ready || !env.zag_db) return;
-    await env.zag_db.prepare(`CREATE TABLE IF NOT EXISTS ${TABLE} (key TEXT PRIMARY KEY, value TEXT)`).run();
-    d1Ready = true;
-}
-
-async function storeGet<T>(env: Env, key: string): Promise<T | null> {
-    if (env.zag_db) {
-        try {
-            await ensureTable(env);
-            const row = await env.zag_db
-                .prepare(`SELECT value FROM ${TABLE} WHERE key = ?`)
-                .bind(key)
-                .first<{ value: string }>();
-
-            return row ? JSON.parse(row.value) as T : null;
-        } catch (error) {
-            console.log(`D1 read failed for ${key}, falling back to KV:`, safeError(error));
-        }
-    }
-
-    return await env.kv.get(key, { type: 'json' }) as T | null;
-}
-
-async function storePut(env: Env, key: string, value: unknown): Promise<void> {
-    const body = JSON.stringify(value);
-
-    if (env.zag_db) {
-        try {
-            await ensureTable(env);
-            await env.zag_db
-                .prepare(`INSERT INTO ${TABLE} (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`)
-                .bind(key, body)
-                .run();
-
-            return;
-        } catch (error) {
-            console.log(`D1 write failed for ${key}, falling back to KV:`, safeError(error));
-        }
-    }
-
-    await env.kv.put(key, body);
-}
 
 /* ==========================================================================
    Defaults
@@ -101,7 +48,6 @@ export function defaultLimits(subToken: string): PanelLimits {
         panelPath: '',
         showStatusNodes: true,
         zagiroName: '',
-        wizardKey: '',
         limitTotalBytes: 0,
         limitDailyBytes: 0,
         downSpeedKbps: 0,
@@ -190,6 +136,17 @@ let usageCachedAt = 0;
 let pendingUp = 0;
 let pendingDown = 0;
 let lastFlush = 0;
+
+/**
+ * Flush cadence. Bytes buffer in the isolate and are merged on this interval,
+ * or when 20 MB have piled up — whichever comes first. With D1's 100k
+ * writes/day across the account's shared database, a two-minute cadence keeps
+ * twenty busy panels around 14k writes/day, a comfortable margin under the
+ * cap. Enforcement stays exact: the quota gate counts the pending bytes in
+ * memory, so a panel never overspends between flushes.
+ */
+const FLUSH_INTERVAL_MS = 120_000;
+const FLUSH_BYTES = 20 * 1024 * 1024;
 
 /** Rolls the daily counter over and archives the day that just ended. */
 function rollDay(usage: UsageSnapshot): UsageSnapshot {

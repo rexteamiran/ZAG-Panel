@@ -1,5 +1,6 @@
 import { WarpAccount } from '#types/settings';
 import { getWarpAccounts } from '@settings';
+import { storePut } from '@settings/store';
 import { generateKeyPairSync } from 'node:crypto';
 
 interface WarpKeys {
@@ -30,7 +31,7 @@ export async function fetchWarpAccounts(env: Env): Promise<WarpAccount[]> {
             if (index === 0) await new Promise(resolve => setTimeout(resolve, 2000));
         }
 
-        await env.kv.put('warpAccounts', JSON.stringify(warpAccounts));
+        await storePut(env, 'warpAccounts', warpAccounts);
         return warpAccounts;
 
     } catch (error) {

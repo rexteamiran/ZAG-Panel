@@ -4,6 +4,7 @@ import { fetchWarpAccounts } from '@api/warp';
 import { safeError } from '@common';
 import { getKvSettings } from '@settings';
 import { setCustomDomain } from '@main';
+import { storeGet, storePut } from './store';
 
 export async function getDataset(env: Env): Promise<{
     settings: KvSettings,
@@ -14,10 +15,10 @@ export async function getDataset(env: Env): Promise<{
     const kvSettings = getKvSettings();
 
     try {
-        settings = await env.kv.get('proxySettings', { type: 'json' });
-        warpAccounts = await env.kv.get('warpAccounts', { type: 'json' });
+        settings = await storeGet<KvSettings>(env, 'proxySettings');
+        warpAccounts = await storeGet<WarpAccount[]>(env, 'warpAccounts');
         if (!settings) {
-            await env.kv.put('proxySettings', JSON.stringify(kvSettings));
+            await storePut(env, 'proxySettings', kvSettings);
             settings = kvSettings;
         }
 
@@ -36,10 +37,10 @@ export async function getDataset(env: Env): Promise<{
             settings = await updateDataset(env, settings as PanelSettings);
         }
 
-        let telegramBot: TelegramBot | null = await env.kv.get('telegramBot', { type: 'json' });
+        let telegramBot: TelegramBot | null = await storeGet<TelegramBot>(env, 'telegramBot');
         if (!telegramBot) {
             telegramBot = { telegramBotToken: '', telegramUserId: '' };
-            await env.kv.put('telegramBot', JSON.stringify(telegramBot));
+            await storePut(env, 'telegramBot', telegramBot);
         }
 
         return {
@@ -49,14 +50,14 @@ export async function getDataset(env: Env): Promise<{
         };
     } catch (error) {
         console.log(error);
-        throw new Error(`An error occurred while getting KV: ${safeError(error)}`);
+        throw new Error(`An error occurred while getting the panel store: ${safeError(error)}`);
     }
 }
 
 export async function updateDataset(env: Env, newSettings?: PanelSettings): Promise<KvSettings> {
     if (!newSettings) {
         const kvSettings = getKvSettings();
-        await env.kv.put('proxySettings', JSON.stringify(kvSettings));
+        await storePut(env, 'proxySettings', kvSettings);
         return kvSettings;
     }
 
@@ -64,10 +65,10 @@ export async function updateDataset(env: Env, newSettings?: PanelSettings): Prom
     const kvSettings = getKvSettings();
 
     try {
-        currentSettings = await env.kv.get('proxySettings', { type: 'json' });
+        currentSettings = await storeGet<KvSettings>(env, 'proxySettings');
     } catch (error) {
         console.log(error);
-        throw new Error(`An error occurred while getting current KV settings: ${safeError(error)}`);
+        throw new Error(`An error occurred while getting the panel's current settings: ${safeError(error)}`);
     }
 
     const getParam = async <T extends keyof KvSettings>(
@@ -181,11 +182,11 @@ export async function updateDataset(env: Env, newSettings?: PanelSettings): Prom
             panelVersion: VERSION
         };
 
-        await env.kv.put('proxySettings', JSON.stringify(updatedSettings));
+        await storePut(env, 'proxySettings', updatedSettings);
         return updatedSettings;
     } catch (error) {
         console.log(error);
-        throw new Error(`An error occurred while updating KV: ${safeError(error)}`);
+        throw new Error(`An error occurred while updating the panel store: ${safeError(error)}`);
     }
 }
 

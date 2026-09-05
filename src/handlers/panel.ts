@@ -8,6 +8,7 @@ import { decompressGzipBase64, respond, HttpStatus, safeError } from '@common';
 import { getDataset, updateDataset } from '@kv';
 import { buildScript, updateMainSettings } from '@main';
 import { getGlobals, getMainSettings, subscriptions, clients } from '@settings';
+import { storeGet } from '@settings/store';
 import { validateSettings } from '@validators';
 import { fallback } from './utils';
 import { setTelegramBot } from '@api/telegram';
@@ -57,7 +58,7 @@ export async function handlePanel(request: Request, env: Env): Promise<Response>
 }
 
 async function renderPanel(request: Request, env: Env): Promise<Response> {
-    const pwd = await env.kv.get('pwd');
+    const pwd = await storeGet<string>(env, 'pwd');
     if (pwd) {
         const auth = await authenticate(request, env);
         if (!auth) {
@@ -132,7 +133,7 @@ async function deletePanel(request: Request, env: Env): Promise<Response> {
 }
 
 async function getPanelSettings(request: Request, env: Env): Promise<Response> {
-    const isPassSet = Boolean(await env.kv.get('pwd'));
+    const isPassSet = Boolean(await storeGet<string>(env, 'pwd'));
 
     try {
         const auth = await authenticate(request, env);
@@ -188,7 +189,7 @@ async function updatePanelSettings(request: Request, env: Env): Promise<Response
 
         const { securePath } = getGlobals();
         if (newSettings.securePath !== securePath) {
-            const bot: TelegramBot | null = await env.kv.get('telegramBot', { type: 'json' });
+            const bot: TelegramBot | null = await storeGet<TelegramBot>(env, 'telegramBot');
             if (bot) {
                 await setTelegramBot(newSettings.securePath, bot.telegramBotToken);
             }

@@ -2,12 +2,13 @@ import { safeError } from '@common';
 import { getGlobals } from '@settings';
 
 export async function deployWorkers(script: string) {
-    const { accID, apiToken, mainDomain } = getGlobals();
+    const { accID, apiToken, mainDomain, d1Id } = getGlobals();
     const metadata = {
         main_module: 'worker.js',
-        keep_bindings: ['kv_namespace'],
+        keep_bindings: ['d1'],
         compatibility_date: new Date().toISOString().split('T')[0],
-        compatibility_flags: ['nodejs_compat']
+        compatibility_flags: ['nodejs_compat'],
+        d1_databases: d1Id ? [{ binding: 'zag_db', id: d1Id }] : []
     };
     const uploadForm = new FormData();
     uploadForm.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));

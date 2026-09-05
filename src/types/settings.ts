@@ -95,6 +95,10 @@ export interface EmbededSettings {
     fallback: string;
     dohUrl: string;
     mainDomain: string;
+    /** This panel's namespace inside the account's shared D1 database. */
+    panelId: string;
+    /** Id of the shared database, so a self-update can rebind `zag_db`. */
+    d1Id: string;
     deployType?: string;
 }
 
@@ -103,6 +107,8 @@ export interface MainSettings extends Omit<EmbededSettings,
     | 'apiToken'
     | 'accEmail'
     | 'mainDomain'
+    | 'panelId'
+    | 'd1Id'
 > { }
 
 export interface SharedSettings extends
@@ -239,13 +245,6 @@ export interface PanelLimits {
     showStatusNodes: boolean;
     /** Name of the ZagiRo profile last applied, for display only. */
     zagiroName: string;
-    /**
-     * API key the wizard uses to reach this panel's own endpoints, seeded at
-     * install. Anyone holding the Cloudflare token can already rewrite the
-     * whole worker, so keeping it in the same store adds no new exposure -
-     * but it is stripped from every API response all the same.
-     */
-    wizardKey: string;
     /** 0 means unlimited, for every limit below. */
     limitTotalBytes: number;
     limitDailyBytes: number;

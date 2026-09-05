@@ -3,13 +3,12 @@ import { EmbededSettings } from './settings';
 declare global {
     interface Env {
         readonly CF_PAGES: string;
-        readonly kv: KVNamespace;
         /**
-         * Usage accounting store. Provisioned by the ZAGROOO Wizard.
-         * Absent on panels deployed before D1 support — those fall back to
-         * buffered KV accounting, see src/settings/usage.ts.
+         * The account's shared panel database, bound as `zag_db`. Every panel
+         * namespaces its rows with its own id — see src/settings/store.ts.
+         * A deploy without this binding is not a working panel.
          */
-        readonly zag_db?: D1Database;
+        readonly zag_db: D1Database;
         readonly UUID?: string;
         readonly TR_PASS?: string;
     }

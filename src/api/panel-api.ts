@@ -9,7 +9,6 @@ import { KvSettings, PanelSettings } from '#types/settings';
 import {
     getLimits,
     getUsageSnapshot,
-    hasD1,
     resetUsage,
     saveLimits,
     usageHistory,
@@ -24,6 +23,9 @@ import {
     saveTemplateStore,
     CustomTemplate
 } from '@templates-store';
+import { buildScript } from '@main';
+import { deployPages } from '@api/pages';
+import { deployWorkers } from '@api/workers';
 
 /* ==========================================================================
    Machine API
@@ -164,6 +166,9 @@ async function routePanelApi(request: Request, env: Env): Promise<Response> {
             case 'reset-usage':
                 return doResetUsage(request, env);
 
+            case 'update':
+                return updateSelf(request, env);
+
             case 'links':
                 return getLinks(limits);
 
@@ -198,14 +203,16 @@ function withCors(response: Response): Response {
 function corsHeaders(): Record<string, string> {
     return {
         'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'GET, POST, PATCH, DELETE, OPTIONS',
+        // PUT carries settings writes from the dashboard, which talks to this
+        // API directly from the browser.
+        'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
         'Access-Control-Allow-Headers': 'Authorization, Content-Type'
     };
 }
 
-/** Limits minus the secrets: key hashes and the wizard key never leave. */
+/** Limits minus the secrets: key hashes never leave. */
 function publicLimits(limits: PanelLimits) {
-    const { panelApiKeys, wizardKey, ...rest } = limits;
+    const { panelApiKeys, ...rest } = limits;
     return { ...rest, apiKeyCount: panelApiKeys.length };
 }
 
@@ -217,14 +224,13 @@ async function getStatus(env: Env, limits: PanelLimits): Promise<Response> {
     const usage = withPending(await getUsageSnapshot(env));
     const { hostname, accEmail, deployType, mainDomain } = getGlobals();
     const { customDomain } = getKvSettings();
-
     return respond(true, HttpStatus.OK, '', {
         panel: {
             version: VERSION,
             host: customDomain || hostname || mainDomain,
             deployType,
             account: accEmail,
-            storage: hasD1(env) ? 'd1' : 'kv'
+            storage: 'd1'
         },
         limits: publicLimits(limits),
         usage: {
@@ -285,6 +291,8 @@ async function patchLimits(request: Request, env: Env, limits: PanelLimits): Pro
     }
 
     if (body.displayName !== undefined) next.displayName = String(body.displayName).slice(0, 64);
+    // The label a dashboard profile stamps onto the panel, display only.
+    if (body.zagiroName !== undefined) next.zagiroName = String(body.zagiroName).slice(0, 60);
     if (body.monthlyReset !== undefined) next.monthlyReset = Boolean(body.monthlyReset);
     if (body.showStatusNodes !== undefined) next.showStatusNodes = Boolean(body.showStatusNodes);
     if (body.alertQuota !== undefined) next.alertQuota = Boolean(body.alertQuota);
@@ -351,6 +359,35 @@ async function doResetUsage(request: Request, env: Env): Promise<Response> {
         total: usage.totalBytes,
         daily: usage.dailyBytes
     });
+}
+
+/**
+ * Redeploys this panel from the latest released script, keeping its identity.
+ * Key-authenticated, so the dashboard can update panels without a Cloudflare
+ * token. `deployWorkers` re-binds `zag_db` from the embedded database id, so
+ * the panel stays attached to the shared store.
+ */
+async function updateSelf(request: Request, env: Env): Promise<Response> {
+    if (request.method !== 'POST') {
+        return respond(false, HttpStatus.METHOD_NOT_ALLOWED, 'Method not allowed.');
+    }
+
+    try {
+        const script = await buildScript(true);
+        const { deployType } = getGlobals();
+
+        if (deployType === 'pages') {
+            // Pages deployments are project-level; bindings live on the
+            // project config and survive the upload, so a plain redeploy works.
+            await deployPages(script);
+        } else {
+            await deployWorkers(script);
+        }
+
+        return respond(true, HttpStatus.OK, 'Panel updated to the latest release.');
+    } catch (error) {
+        return respond(false, HttpStatus.INTERNAL_SERVER_ERROR, `Update failed: ${safeError(error)}`);
+    }
 }
 
 function getLinks(limits: PanelLimits): Response {
@@ -506,8 +543,8 @@ async function applySettings(request: Request, env: Env): Promise<Response> {
    Templates
 
    Built-ins ship inside the worker; custom ones and the customer-visible set
-   live in KV. The admin UI, the subscriber portal and the wizard all read the
-   same list from here.
+   live in the panel's D1 store. The admin UI, the subscriber portal and the
+   dashboard all read the same list from here.
    ========================================================================== */
 
 async function getTemplates(env: Env): Promise<Response> {

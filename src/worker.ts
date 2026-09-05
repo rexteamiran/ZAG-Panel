@@ -1,5 +1,5 @@
 import { handleDoH } from '@handlers/doh';
-import { renderError } from '@handlers/error';
+import { renderError, renderReinstall } from '@handlers/error';
 import { handleLogin } from '@handlers/login';
 import { handlePanel } from '@handlers/panel';
 import { handleProxyIPs } from '@handlers/proxy-ip';
@@ -15,6 +15,8 @@ import { bindContext } from '@usage';
 export default {
 	async fetch(request: Request, env: Env, ctx: ExecutionContext) {
 		try {
+			if (!env.zag_db) return renderReinstall();
+
 			init(request, env);
 			bindContext(env, ctx);
 			if (request.headers.get('Upgrade') === 'websocket') return handleWebsocket(request, env, ctx);

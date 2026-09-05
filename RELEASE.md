@@ -1,5 +1,26 @@
 # ZAGROOO Panel
 
+## 1.3.0 — D1-only storage and a machine API for the dashboard
+
+### Breaking: KV is gone, D1 is the only store
+
+Every panel now binds the account's shared `zagrooo-panels` D1 database as
+`zag_db` and namespaces its rows with its own panel id. Panels deployed before
+this version cannot self-update into it — reinstall them once with the current
+wizard. One database serves every panel on the account, so the free plan's
+ten-database cap no longer bounds how many panels you can run.
+
+Usage flushes moved from 30s to a two-minute cadence (or 20 MB, whichever
+first). Quota enforcement stays exact — pending bytes count in memory at the
+gate — but reported totals can lag up to two minutes.
+
+### New: the panel is the API
+
+- `POST /api/update` — redeploy from the latest release with an API key, no
+  admin session or Cloudflare token needed.
+- `PUT` joined the CORS allow-list, so a browser dashboard can talk to panels
+  directly.
+
 ## 1.2.1
 
 - Fixed the release build failing on a clean checkout: the template export ran

@@ -4,6 +4,7 @@ import { getCfWorkerUsage } from './usage';
 import { authenticate } from '@auth';
 import { PanelLimits, TelegramBot, UsageSnapshot } from '#types/settings';
 import { formatBytes } from '@limits';
+import { storeGet, storePut } from '@settings/store';
 
 export async function setupTelegramWebhook(request: Request, env: Env): Promise<Response> {
     if (request.method !== 'PUT') {
@@ -32,7 +33,7 @@ export async function setupTelegramWebhook(request: Request, env: Env): Promise<
             telegramUserId: userID
         };
 
-        await env.kv.put('telegramBot', JSON.stringify(bot));
+        await storePut(env, 'telegramBot', bot);
         return respond(true, HttpStatus.OK, 'Telegram bot setup completed successfully!', bot);
     } catch (error) {
         return respond(false, HttpStatus.INTERNAL_SERVER_ERROR, `Error occurred while setting Telegram Bot: ${safeError(error)}`);
@@ -85,7 +86,7 @@ export async function removeTelegramBot(request: Request, env: Env) {
             return respond(false, HttpStatus.UNAUTHORIZED, 'Unauthorized or expired session.');
         }
 
-        const { telegramBotToken } = await env.kv.get('telegramBot', { type: 'json' }) as any;
+        const { telegramBotToken } = await storeGet<TelegramBot>(env, 'telegramBot') ?? { telegramBotToken: '' } as TelegramBot;
         const res = await fetch(`https://api.telegram.org/bot${telegramBotToken}/deleteWebhook`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -100,7 +101,7 @@ export async function removeTelegramBot(request: Request, env: Env) {
         }
 
         const bot: TelegramBot = { telegramBotToken: '', telegramUserId: '' };
-        await env.kv.put('telegramBot', JSON.stringify(bot));
+        await storePut(env, 'telegramBot', bot);
 
         return respond(true, HttpStatus.OK, 'Telegram bot webhook deleted successfully!', bot);
     } catch (error) {
@@ -417,7 +418,7 @@ async function handleCallback(cq: TgCallbackQuery, token: string, chatId: number
 }
 
 export async function handleTelegramWebhook(request: Request, env: Env): Promise<Response> {
-    const tgBot: TelegramBot | null = await env.kv.get('telegramBot', { type: 'json' });
+    const tgBot = await storeGet<TelegramBot>(env, 'telegramBot');
     if (!tgBot) return new Response(null, { status: 200 });
 
     const { telegramBotToken: botToken, telegramUserId: userId } = tgBot;
@@ -530,7 +531,7 @@ const QUOTA_ALERT_THRESHOLD = 0.8;
 const EXPIRY_ALERT_DAYS = 3;
 
 async function pushAlert(env: Env, text: string): Promise<void> {
-    const bot: TelegramBot | null = await env.kv.get('telegramBot', { type: 'json' });
+    const bot = await storeGet<TelegramBot>(env, 'telegramBot');
     if (!bot?.telegramBotToken || !bot?.telegramUserId) return;
 
     await fetch(`https://api.telegram.org/bot${bot.telegramBotToken}/sendMessage`, {

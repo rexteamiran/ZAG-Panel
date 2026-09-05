@@ -1,19 +1,18 @@
 import { KvSettings } from '#types/settings';
 import { settingsTemplates, SettingsTemplate, TemplateSettings } from '@templates';
 import { safeError } from '@common';
+import { storeGet, storePut } from './store';
 
 /* ==========================================================================
    Template storage
 
    Built-in templates ship inside the worker. Custom ones the operator saved,
-   and the set they chose to show customers, live in KV beside the panel's
-   settings.
+   and the set they chose to show customers, live in the panel's D1 store
+   beside the panel's settings.
 
    The enabled set is what the subscriber portal shows: a customer should see
    four or five links they can choose between, not twenty-four.
    ========================================================================== */
-
-const TEMPLATES_KEY = 'templates';
 
 export interface CustomTemplate {
     id: string;
@@ -41,7 +40,7 @@ export async function getTemplateStore(env: Env): Promise<TemplateStore> {
     if (cache && Date.now() - cachedAt < TTL_MS) return cache;
 
     try {
-        const stored = await env.kv.get(TEMPLATES_KEY, { type: 'json' }) as Partial<TemplateStore> | null;
+        const stored = await storeGet<Partial<TemplateStore>>(env, 'templates');
         cache = {
             enabled: Array.isArray(stored?.enabled) ? stored!.enabled : [],
             custom: Array.isArray(stored?.custom) ? stored!.custom : []
@@ -58,7 +57,7 @@ export async function getTemplateStore(env: Env): Promise<TemplateStore> {
 export async function saveTemplateStore(env: Env, store: TemplateStore): Promise<TemplateStore> {
     cache = store;
     cachedAt = Date.now();
-    await env.kv.put(TEMPLATES_KEY, JSON.stringify(store));
+    await storePut(env, 'templates', store);
     return store;
 }
 
