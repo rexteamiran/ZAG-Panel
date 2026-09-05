@@ -1,5 +1,34 @@
 # ZAGROOO Panel
 
+## 1.3.2 — design system v2, and a full engineering pass
+
+The shared design system was rebuilt and applied to every page (see
+DESIGN.md): components reference tokens only, interactive elements signal
+with colour instead of movement, and the last raw colour literals are gone
+from page CSS. Event pills carry words with their colours, numbers that
+change live render in tabular mono digits, and modals share one teal-deep
+scrim.
+
+A full review also fixed defects that shipped in earlier versions:
+
+- The admin panel's "random Trojan password" button generated a string
+  containing the build placeholder instead of random characters — the
+  inlined script is now spliced safely, so the generated password is real.
+- Trojan connections lost the first bytes of every tunneled request to an
+  off-by-two in the header parser.
+- The operator event log at `/{securePath}/log` never loaded: its page
+  called the wrong URL.
+- Subscriber-portal app cards and the admin panel's API-key list could
+  inject markup (XSS); both escape now.
+- The DoH endpoint forwarded visitors' cookies to the upstream resolver.
+- Truncated VLESS headers were parsed past the buffer end and failed
+  silently instead of being rejected.
+- A malformed NAT64 prefix crashed the retry path with an opaque error.
+- Malformed JSON to the auth endpoints returned 500s; password changes now
+  enforce the same policy the login form does, server-side.
+- Saving settings could bake pre-update values into the redeployed script
+  when the dataset write raced the script build.
+
 ## 1.3.1 — the event log
 
 New: `/{securePath}/log`. Everything the panel catches — a request that died,
