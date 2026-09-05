@@ -267,6 +267,8 @@ html.dark .icon-light {
     display: block;
     font-size: 1.35rem;
     font-weight: 700;
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
 }
 
 .stat-value-sm {
@@ -361,6 +363,7 @@ html.dark .icon-light {
     color: var(--text-2);
     font-family: var(--font-mono);
     font-size: var(--font-size-sm);
+    font-variant-numeric: tabular-nums;
     direction: ltr;
     text-align: start;
 }
@@ -369,12 +372,18 @@ html.dark .icon-light {
     display: inline-flex;
     align-items: center;
     gap: 0.35rem;
+    min-height: 2.5rem;
     padding: 0.6rem 0.9rem;
     border-radius: var(--radius-item);
     font-size: var(--font-size-sm);
     font-weight: 600;
     white-space: nowrap;
     transition: var(--transition-standard);
+}
+
+.btn:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px var(--accent-tint-2);
 }
 
 .btn-accent {
@@ -575,6 +584,7 @@ html.dark .icon-light {
 
 .meter-head span:last-child {
     font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
     font-weight: 600;
     direction: ltr;
 }

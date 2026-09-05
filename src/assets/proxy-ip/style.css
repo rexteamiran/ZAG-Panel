@@ -1,11 +1,11 @@
-/* ZAGROOO tokens live in src/assets/theme.css */
+/* ZAGROOO proxy-ip — tokens live in theme.css (see DESIGN.md). */
 
 body {
     font-family: var(--font-sans);
     text-align: center;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    background: var(--color-bg-main);
+    background: var(--canvas);
 }
 
 body.is-loading {
@@ -25,8 +25,7 @@ body.is-loading * {
 }
 
 h1 {
-    color: var(--color-text-primary);
-    text-shadow: var(--shadow-header);
+    color: var(--text);
     display: flex;
     justify-content: center;
     align-items: stretch;
@@ -45,7 +44,8 @@ h1 {
 
 .panel-version {
     align-self: flex-start;
-    font-size: large;
+    font-size: var(--font-size-sm);
+    color: var(--muted);
 }
 
 .table-wrapper {
@@ -55,58 +55,64 @@ h1 {
     padding: var(--space-md);
 }
 
+/* A table is a card: one surface, 1px lines, no double borders. */
 table {
     display: inline-table;
-    border: 1px solid var(--color-border);
+    border: 1px solid var(--line);
     border-collapse: separate;
     border-spacing: 0;
-    border-radius: var(--radius-ui);
+    border-radius: var(--radius-card);
     overflow: hidden;
-    background: color-mix(in srgb, var(--color-bg-card), #000328 8%);
-    box-shadow: var(--shadow-table);
+    background: var(--surface);
+    box-shadow: var(--shadow-shell);
 }
 
 tbody {
-    color: var(--color-bg-card);
+    color: var(--text-2);
 }
 
 th,
 td {
     text-align: center;
     white-space: nowrap;
-    padding: 10px;
-    border-bottom: 1px solid var(--color-border);
-    color: var(--color-text-secondary);
+    padding: 0.6rem 0.8rem;
+    border-bottom: 1px solid var(--line-soft);
+    color: var(--text-2);
 }
 
-td:first-child,
+tr:last-child td {
+    border-bottom: none;
+}
+
 th {
-    background-color: var(--color-table-active);
-    font-weight: bold;
-    color: var(--color-text-primary);
+    background: var(--surface-2);
+    font-weight: 700;
+    color: var(--text);
 }
 
 td:first-child {
-    color: var(--color-text-secondary);
+    color: var(--text-2);
 }
 
 td:nth-child(2) {
     display: flex;
     align-items: center;
     gap: 6px;
-    color: var(--color-text-primary);
+    color: var(--text);
     justify-content: space-between;
 }
 
+/* Results are numbers: mono + tabular digits. */
 td:nth-child(3),
 td:nth-child(4) {
-    color: var(--color-text-primary);
+    color: var(--text);
     font-weight: 700;
-    color: var(--color-text-primary);
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
 }
 
 .material-symbols-rounded {
-    color: var(--color-brand-primary);
+    color: var(--text-2);
     cursor: pointer;
     font-variation-settings:
         'FILL' 0,
@@ -115,6 +121,7 @@ td:nth-child(4) {
         'opsz' 24
 }
 
+/* Icons signal with colour, never scale. */
 .material-symbols-rounded:hover {
-    scale: calc(1.2);
+    color: var(--accent);
 }

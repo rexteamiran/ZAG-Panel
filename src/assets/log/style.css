@@ -1,4 +1,4 @@
-/* ZAGROOO tokens live in src/assets/theme.css */
+/* ZAGROOO panel event log — tokens live in theme.css (see DESIGN.md). */
 
 html,
 body {
@@ -11,8 +11,8 @@ body {
     text-align: center;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    background: var(--color-bg-main);
-    color: var(--color-text-primary);
+    background: var(--canvas);
+    color: var(--text);
     padding-bottom: 40px;
 }
 
@@ -32,8 +32,7 @@ body {
 }
 
 h1 {
-    color: var(--color-text-primary);
-    text-shadow: var(--shadow-header);
+    color: var(--text);
     display: flex;
     justify-content: center;
     align-items: stretch;
@@ -47,15 +46,16 @@ h1 {
 
 .panel-version {
     align-self: flex-start;
-    font-size: large;
+    font-size: var(--font-size-sm);
+    color: var(--muted);
 }
 
 .log-container {
-    background-color: var(--color-bg-card);
-    border: 1px solid var(--color-border-accent);
+    background: var(--surface);
+    border: 1px solid var(--line);
     border-radius: var(--radius-card);
     padding: var(--space-lg);
-    box-shadow: var(--shadow-card);
+    box-shadow: var(--shadow-shell);
     text-align: left;
 }
 
@@ -67,6 +67,7 @@ h1 {
     margin-bottom: 14px;
 }
 
+/* Search input with its decorative inset glyph. */
 .search-wrapper {
     position: relative;
     flex: 1;
@@ -76,82 +77,95 @@ h1 {
 .search-wrapper .material-symbols-rounded {
     position: absolute;
     top: 50%;
-    left: 10px;
+    inset-inline-start: 10px;
     transform: translateY(-50%);
-    color: darkgray;
+    color: var(--muted);
     font-size: 20px;
+    pointer-events: none;
 }
 
 .search-wrapper input {
     width: 100%;
     box-sizing: border-box;
-    padding: 10px 10px 10px 36px;
-    border: none;
-    border-radius: var(--radius-ui);
-    color: var(--color-text-primary);
-    background-color: var(--color-bg-input);
+    padding: 0.6rem 0.8rem;
+    padding-inline-start: 36px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-item);
+    color: var(--text);
+    background: var(--field);
     line-height: 1.5;
     outline: none;
     font-size: var(--font-size-base);
     font-family: inherit;
-    box-shadow: var(--shadow-input);
     transition: var(--transition-standard);
 }
 
 .search-wrapper input:focus {
-    border-color: var(--color-brand-primary);
-    box-shadow: var(--shadow-input-focus);
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-tint);
 }
 
 select {
-    padding: 10px;
-    border: none;
-    border-radius: var(--radius-ui);
-    color: var(--color-text-primary);
-    background-color: var(--color-bg-input);
+    padding: 0.6rem 0.7rem;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-item);
+    color: var(--text);
+    background: var(--field);
     outline: none;
     font-size: var(--font-size-base);
     font-family: inherit;
-    box-shadow: var(--shadow-input);
     cursor: pointer;
 }
 
+select:focus-visible {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-tint);
+}
+
+/* Ghost buttons everywhere; only one clay action per view. */
 .button {
-    display: flex;
+    display: inline-flex;
     align-items: center;
     gap: 4px;
+    min-height: 2.5rem;
     white-space: nowrap;
-    padding: var(--space-md);
+    padding: 0.6rem 0.95rem;
     font-size: var(--font-size-base);
     font-weight: 600;
-    border: 1px solid var(--color-border-accent);
-    border-radius: var(--radius-btn);
-    color: var(--color-text-btn);
-    background: var(--color-bg-btn);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-item);
+    color: var(--text-2);
+    background: var(--surface);
     cursor: pointer;
     outline: none;
-    box-shadow: var(--shadow-soft);
-    transition: all 0.3s ease;
+    transition: var(--transition-standard);
 }
 
 .button:hover {
-    background-color: var(--color-brand-primary);
-    box-shadow: var(--shadow-shell);
-    color: var(--color-text-primary);
+    border-color: var(--accent);
+    color: var(--accent);
 }
 
-.button:active {
-    transform: translateY(1px);
-    box-shadow: var(--shadow-soft);
+.button:focus-visible {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-tint-2);
 }
 
 .button .material-symbols-rounded {
     font-size: 20px;
 }
 
+/* Destructive: tinted red, confirms before it runs. */
+.button.is-danger {
+    border-color: var(--red-border);
+    color: var(--red-text);
+    background: var(--red-bg);
+}
+
 .button.is-danger:hover {
-    background-color: var(--color-danger);
-    border-color: var(--color-danger);
+    border-color: var(--danger);
+    color: var(--red-text);
+    background: var(--red-bg);
 }
 
 .events {
@@ -160,12 +174,13 @@ select {
     gap: 8px;
 }
 
+/* Event row: semantic 3px left border on a nested surface. */
 .event {
-    border: 1px solid var(--color-border-ui);
-    border-left: 3px solid var(--color-border-accent);
-    border-radius: var(--radius-ui);
+    border: 1px solid var(--line-soft);
+    border-left: 3px solid var(--line);
+    border-radius: var(--radius-item);
     padding: 10px 14px;
-    background: var(--color-bg-input);
+    background: var(--surface-2);
 }
 
 .event.is-error {
@@ -183,56 +198,65 @@ select {
     gap: 8px;
 }
 
+/* Pills carry words — status is never colour alone. */
 .event-level {
-    font-size: var(--font-size-sm);
+    font-size: var(--font-size-xs);
     font-weight: 700;
-    padding: 1px 8px;
+    letter-spacing: 0.04em;
+    padding: 0.1rem 0.5rem;
     border-radius: 999px;
 }
 
 .is-error .event-level {
-    color: var(--danger);
+    color: var(--red-text);
     background: var(--red-bg);
+    border: 1px solid var(--red-border);
 }
 
 .is-warn .event-level {
-    color: var(--warn);
+    color: var(--amber-text);
     background: var(--amber-bg);
+    border: 1px solid var(--amber-border);
 }
 
 .event-source {
     font-weight: 600;
-    color: var(--color-text-secondary);
-    font-size: var(--font-size-sm);
+    color: var(--text-2);
+    font-size: var(--font-size-xs);
 }
 
+/* Timestamps are numbers: mono + tabular digits. */
 .event-time {
-    margin-left: auto;
-    color: var(--color-text-secondary);
-    font-size: var(--font-size-sm);
+    margin-inline-start: auto;
+    color: var(--muted);
+    font-size: var(--font-size-xs);
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
 }
 
 .event-message {
     margin-top: 4px;
-    font-size: var(--font-size-base);
+    font-size: var(--font-size-sm);
     word-break: break-word;
+    color: var(--text);
 }
 
 .event-detail {
     margin-top: 6px;
     padding: 8px 10px;
-    border-radius: var(--radius-ui);
-    background: var(--surface-2);
+    border-radius: var(--radius-item);
+    background: var(--surface-3);
     font-family: var(--font-mono);
-    font-size: var(--font-size-sm);
+    font-size: var(--font-size-xs);
     white-space: pre-wrap;
     word-break: break-word;
-    color: var(--color-text-secondary);
+    color: var(--text-2);
 }
 
+/* Empty states say what to do next, not just "empty". */
 .empty {
     text-align: center;
-    color: var(--color-text-secondary);
+    color: var(--muted);
     padding: 26px 10px;
 }
 
@@ -246,7 +270,7 @@ select {
 
 @media only screen and (max-width: 576px) {
     .event-time {
-        margin-left: 0;
+        margin-inline-start: 0;
         width: 100%;
     }
 }
